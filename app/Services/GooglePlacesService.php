@@ -25,31 +25,33 @@ class GooglePlacesService
         ]);
     }
 
-    public function getNearbyRestaurants(string $foodType, float $maxDistance): array
-    {
+    public function getNearbyRestaurants(
+        string $foodType,
+        float $maxDistance,
+        float $userLat = -6.2233,
+        float $userLng = 106.6491
+    ): array {
         if (empty($this->apiKey)) {
             Log::warning('GooglePlacesService: No API key, using dummy data.');
-            return $this->getDummyData($maxDistance);
+            return $this->getDummyData($maxDistance, $userLat, $userLng);
         }
 
         try {
-            // Base search — general restaurants nearby
-            $general = $this->fetchFromGoogle($maxDistance);
-
-            // If specific food type requested, do a second keyword search
+            $general  = $this->fetchFromGoogle($maxDistance, '', $userLat, $userLng);
             $targeted = [];
+
             if ($foodType !== 'any') {
-                $targeted = $this->fetchFromGoogle($maxDistance, $foodType);
+                $targeted = $this->fetchFromGoogle($maxDistance, $foodType, $userLat, $userLng);
             }
 
-            // Merge both, deduplicate by place_id
-            $all = array_merge($general, $targeted);
-            $seen = [];
+            $all    = array_merge($general, $targeted);
+            $seen   = [];
             $unique = [];
+
             foreach ($all as $place) {
                 if (!in_array($place['google_place_id'], $seen)) {
-                    $seen[]    = $place['google_place_id'];
-                    $unique[]  = $place;
+                    $seen[]   = $place['google_place_id'];
+                    $unique[] = $place;
                 }
             }
 
@@ -57,14 +59,18 @@ class GooglePlacesService
 
         } catch (GuzzleException $e) {
             Log::error('GooglePlacesService Guzzle error: ' . $e->getMessage());
-            return $this->getDummyData($maxDistance);
+            return $this->getDummyData($maxDistance, $userLat, $userLng);
         }
     }
 
-    private function fetchFromGoogle(float $maxDistance, string $keyword = ''): array
-    {
+    private function fetchFromGoogle(
+        float $maxDistance,
+        string $keyword = '',
+        float $userLat = -6.2233,
+        float $userLng = 106.6491
+    ): array {
         $params = [
-            'location' => "{$this->userLat},{$this->userLng}",
+            'location' => "{$userLat},{$userLng}",
             'radius'   => (int) $maxDistance,
             'type'     => 'restaurant',
             'key'      => $this->apiKey,
@@ -82,17 +88,22 @@ class GooglePlacesService
             return [];
         }
 
-        return $this->mapResults($data['results']);
+        return $this->mapResults($data['results'], $userLat, $userLng);
     }
 
-    private function mapResults(array $results): array
-    {
+    private function mapResults(
+        array $results,
+        float $userLat = -6.2233,
+        float $userLng = 106.6491
+    ): array {
         $mapped = [];
 
-        $nonFoodTypes = ['furniture_store', 'home_goods_store', 'hardware_store', 'clothing_store', 'electronics_store'];
+        $nonFoodTypes = [
+            'furniture_store', 'home_goods_store', 'hardware_store',
+            'clothing_store', 'electronics_store'
+        ];
 
         foreach ($results as $place) {
-            // Skip non-food establishments
             if (!empty(array_intersect($place['types'] ?? [], $nonFoodTypes))) {
                 continue;
             }
@@ -105,10 +116,7 @@ class GooglePlacesService
                 'google_place_id' => $place['place_id'],
                 'lat'             => $lat,
                 'lng'             => $lng,
-                'distance'        => $this->calculateDistance(
-                                        $this->userLat, $this->userLng,
-                                        $lat, $lng
-                                    ),
+                'distance'        => $this->calculateDistance($userLat, $userLng, $lat, $lng),
                 'rating'          => (float) ($place['rating'] ?? 3.0),
                 'review_count'    => (int)   ($place['user_ratings_total'] ?? 0),
                 'price_level'     => (int)   ($place['price_level'] ?? 2),
@@ -338,42 +346,43 @@ class GooglePlacesService
         return round($earthRadius * 2 * atan2(sqrt($a), sqrt(1 - $a)), 2);
     }
 
-    private function getDummyData(float $maxDistance): array
-    {
+    // dummy data for 
+    private function getDummyData(
+        float $maxDistance,
+        float $userLat = -6.2233,
+        float $userLng = 106.6491
+    ): array {
         $places = [
-            ['name' => 'Ikkudo Ichi Ramen',        'lat' => -6.2248, 'lng' => 106.6510, 'rating' => 4.5, 'price_level' => 2, 'types' => ['ramen', 'japanese']],
-            ['name' => 'Ramen Bajuri',              'lat' => -6.2260, 'lng' => 106.6478, 'rating' => 4.2, 'price_level' => 1, 'types' => ['ramen', 'indonesian']],
-            ['name' => 'Yoshinoya',                 'lat' => -6.2241, 'lng' => 106.6502, 'rating' => 3.8, 'price_level' => 1, 'types' => ['japanese', 'fastfood']],
-            ['name' => 'Nasi Goreng Kambing',       'lat' => -6.2290, 'lng' => 106.6520, 'rating' => 4.6, 'price_level' => 2, 'types' => ['indonesian']],
-            ['name' => 'Pizza Hut',                 'lat' => -6.2310, 'lng' => 106.6540, 'rating' => 3.9, 'price_level' => 2, 'types' => ['pizza']],
-            ['name' => 'Sushi Tei',                 'lat' => -6.2255, 'lng' => 106.6495, 'rating' => 4.3, 'price_level' => 3, 'types' => ['sushi', 'japanese']],
-            ['name' => 'Bakso Malang',              'lat' => -6.2200, 'lng' => 106.6460, 'rating' => 4.4, 'price_level' => 1, 'types' => ['indonesian']],
-            ['name' => 'McDonald\'s Alam Sutera',   'lat' => -6.2235, 'lng' => 106.6505, 'rating' => 4.0, 'price_level' => 1, 'types' => ['burger', 'fastfood']],
-            ['name' => 'Solaria',                   'lat' => -6.2270, 'lng' => 106.6488, 'rating' => 3.7, 'price_level' => 2, 'types' => ['indonesian']],
-            ['name' => 'Pepper Lunch',              'lat' => -6.2245, 'lng' => 106.6498, 'rating' => 4.1, 'price_level' => 2, 'types' => ['japanese']],
-            ['name' => 'Hokben',                    'lat' => -6.2238, 'lng' => 106.6492, 'rating' => 4.0, 'price_level' => 1, 'types' => ['japanese', 'fastfood']],
-            ['name' => 'Warung Padang Sederhana',   'lat' => -6.2215, 'lng' => 106.6472, 'rating' => 4.5, 'price_level' => 1, 'types' => ['indonesian']],
-            ['name' => 'Starbucks Alam Sutera',     'lat' => -6.2242, 'lng' => 106.6507, 'rating' => 4.3, 'price_level' => 3, 'types' => ['coffee']],
-            ['name' => 'Burger King',               'lat' => -6.2265, 'lng' => 106.6515, 'rating' => 4.0, 'price_level' => 2, 'types' => ['burger', 'fastfood']],
-            ['name' => 'Mie Ramen 88',              'lat' => -6.2225, 'lng' => 106.6480, 'rating' => 4.3, 'price_level' => 1, 'types' => ['ramen']],
-            ['name' => 'KFC Alam Sutera',           'lat' => -6.2237, 'lng' => 106.6493, 'rating' => 3.9, 'price_level' => 1, 'types' => ['chicken', 'fastfood']],
-            ['name' => 'Shaburi Shabu-shabu',       'lat' => -6.2300, 'lng' => 106.6535, 'rating' => 4.4, 'price_level' => 3, 'types' => ['japanese']],
-            ['name' => 'Nene Chicken',              'lat' => -6.2243, 'lng' => 106.6496, 'rating' => 4.2, 'price_level' => 2, 'types' => ['chicken']],
-            ['name' => 'Ichiban Sushi',             'lat' => -6.2280, 'lng' => 106.6530, 'rating' => 4.1, 'price_level' => 2, 'types' => ['sushi', 'japanese']],
-            ['name' => 'Chatime',                   'lat' => -6.2252, 'lng' => 106.6501, 'rating' => 4.2, 'price_level' => 1, 'types' => ['coffee']],
+            ['name' => 'Ikkudo Ichi Ramen',      'lat' => -6.2248, 'lng' => 106.6510, 'rating' => 4.5, 'price_level' => 2, 'types' => ['ramen', 'japanese']],
+            ['name' => 'Ramen Bajuri',            'lat' => -6.2260, 'lng' => 106.6478, 'rating' => 4.2, 'price_level' => 1, 'types' => ['ramen', 'indonesian']],
+            ['name' => 'Yoshinoya',               'lat' => -6.2241, 'lng' => 106.6502, 'rating' => 3.8, 'price_level' => 1, 'types' => ['japanese', 'fastfood']],
+            ['name' => 'Nasi Goreng Kambing',     'lat' => -6.2290, 'lng' => 106.6520, 'rating' => 4.6, 'price_level' => 2, 'types' => ['indonesian']],
+            ['name' => 'Pizza Hut',               'lat' => -6.2310, 'lng' => 106.6540, 'rating' => 3.9, 'price_level' => 2, 'types' => ['pizza']],
+            ['name' => 'Sushi Tei',               'lat' => -6.2255, 'lng' => 106.6495, 'rating' => 4.3, 'price_level' => 3, 'types' => ['sushi', 'japanese']],
+            ['name' => 'Bakso Malang',            'lat' => -6.2200, 'lng' => 106.6460, 'rating' => 4.4, 'price_level' => 1, 'types' => ['indonesian']],
+            ['name' => 'McDonald\'s Alam Sutera', 'lat' => -6.2235, 'lng' => 106.6505, 'rating' => 4.0, 'price_level' => 1, 'types' => ['burger', 'fastfood']],
+            ['name' => 'Solaria',                 'lat' => -6.2270, 'lng' => 106.6488, 'rating' => 3.7, 'price_level' => 2, 'types' => ['indonesian']],
+            ['name' => 'Pepper Lunch',            'lat' => -6.2245, 'lng' => 106.6498, 'rating' => 4.1, 'price_level' => 2, 'types' => ['japanese']],
+            ['name' => 'Hokben',                  'lat' => -6.2238, 'lng' => 106.6492, 'rating' => 4.0, 'price_level' => 1, 'types' => ['japanese', 'fastfood']],
+            ['name' => 'Warung Padang Sederhana', 'lat' => -6.2215, 'lng' => 106.6472, 'rating' => 4.5, 'price_level' => 1, 'types' => ['indonesian']],
+            ['name' => 'Starbucks Alam Sutera',   'lat' => -6.2242, 'lng' => 106.6507, 'rating' => 4.3, 'price_level' => 3, 'types' => ['coffee']],
+            ['name' => 'Burger King',             'lat' => -6.2265, 'lng' => 106.6515, 'rating' => 4.0, 'price_level' => 2, 'types' => ['burger', 'fastfood']],
+            ['name' => 'Mie Ramen 88',            'lat' => -6.2225, 'lng' => 106.6480, 'rating' => 4.3, 'price_level' => 1, 'types' => ['ramen']],
+            ['name' => 'KFC Alam Sutera',         'lat' => -6.2237, 'lng' => 106.6493, 'rating' => 3.9, 'price_level' => 1, 'types' => ['chicken', 'fastfood']],
+            ['name' => 'Shaburi Shabu-shabu',     'lat' => -6.2300, 'lng' => 106.6535, 'rating' => 4.4, 'price_level' => 3, 'types' => ['japanese']],
+            ['name' => 'Nene Chicken',            'lat' => -6.2243, 'lng' => 106.6496, 'rating' => 4.2, 'price_level' => 2, 'types' => ['chicken']],
+            ['name' => 'Ichiban Sushi',           'lat' => -6.2280, 'lng' => 106.6530, 'rating' => 4.1, 'price_level' => 2, 'types' => ['sushi', 'japanese']],
+            ['name' => 'Chatime',                 'lat' => -6.2252, 'lng' => 106.6501, 'rating' => 4.2, 'price_level' => 1, 'types' => ['coffee']],
         ];
 
         foreach ($places as &$place) {
-            $place['distance']        = $this->calculateDistance(
-                                            $this->userLat, $this->userLng,
-                                            $place['lat'], $place['lng']
-                                        );
+            $place['distance']        = $this->calculateDistance($userLat, $userLng, $place['lat'], $place['lng']);
             $place['google_place_id'] = 'dummy_' . str_replace(' ', '_', strtolower($place['name']));
             $place['food_match']      = 0;
             $place['open_now']        = true;
             $place['photo_ref']       = null;
+            $place['review_count']    = 50;
             $place['vicinity']        = 'Alam Sutera, Tangerang';
-            $place['review_count'] = 50;
         }
 
         return array_values(array_filter(

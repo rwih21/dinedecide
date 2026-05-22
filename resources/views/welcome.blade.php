@@ -20,7 +20,7 @@
             @auth
                 <a href="{{ route('restaurants.index') }}"
                    class="bg-[#059669] hover:bg-emerald-500 text-white font-medium px-6 py-3 rounded-xl transition-colors">
-                    Start searching →
+                    Start searching
                 </a>
             @else
                 <a href="{{ route('register') }}"

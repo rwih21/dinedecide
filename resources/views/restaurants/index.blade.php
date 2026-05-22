@@ -20,9 +20,9 @@
                 <span class="font-bold text-lg" style="color:#1A1A1A">DineDecide</span>
             </div>
             <div class="text-right">
-                <p class="font-bold uppercase tracking-widest" style="color:#059669; font-size:10px">
+                {{-- <p class="font-bold uppercase tracking-widest" style="color:#059669; font-size:10px">
                     📍 Alam Sutera
-                </p>
+                </p> --}}
                 <p class="font-bold uppercase tracking-widest mt-0.5" style="color:#525252; font-size:10px"
                    x-data="{ time: '' }"
                    x-init="const u=()=>{time=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})};u();setInterval(u,1000)"
@@ -49,6 +49,83 @@
                 <p class="mt-2 text-sm" style="color:#525252">Choose how you want to decide.</p>
             </div>
 
+            {{-- Location Selector --}}
+            <div class="mb-6 fade-up-delay-2" x-data="locationPicker()">
+                <input type="hidden" id="global-latitude"  x-model="lat">
+                <input type="hidden" id="global-longitude" x-model="lng">
+
+                <div class="bg-white rounded-2xl p-4"
+                     style="box-shadow:0 4px 24px rgba(0,0,0,0.08); border:1.5px solid #F0F0EF">
+
+                    <p class="font-bold uppercase tracking-widest mb-3" style="font-size:10px; color:#A3A3A3">
+                        📍 Your Location
+                    </p>
+
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="flex-1">
+                            <p class="text-sm font-medium" style="color:#1A1A1A" x-text="label"></p>
+                            <p class="text-xs font-mono mt-0.5" style="color:#A3A3A3"
+                               x-show="lat && lng"
+                               x-text="`${parseFloat(lat).toFixed(4)}, ${parseFloat(lng).toFixed(4)}`">
+                            </p>
+                            <p class="text-xs mt-0.5" style="color:#EF4444"
+                               x-show="error" x-text="error">
+                            </p>
+                        </div>
+                        <button type="button"
+                                @click="detectLocation()"
+                                :disabled="detecting"
+                                class="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl transition-all duration-200 active:scale-95"
+                                style="background:#F0FDF4; color:#059669; border:1px solid #BBF7D0">
+                            <span x-show="!detecting">📡 Detect</span>
+                            <span x-show="detecting">Detecting...</span>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-2 my-3">
+                        <div class="flex-1 h-px" style="background:#F0F0EF"></div>
+                        <p class="text-xs" style="color:#A3A3A3">or set manually</p>
+                        <div class="flex-1 h-px" style="background:#F0F0EF"></div>
+                    </div>
+
+                    <div x-show="!showManual">
+                        <button type="button"
+                                @click="showManual = true"
+                                class="w-full text-xs font-medium py-2 rounded-xl border transition-colors"
+                                style="color:#525252; border-color:#E5E5E5">
+                            🔍 Set a different location
+                        </button>
+                    </div>
+
+                    <div x-show="showManual" class="space-y-2">
+                        <input type="text"
+                               x-model="manualSearch"
+                               placeholder="e.g. Hotel Tentrem Semarang"
+                               class="w-full text-sm px-3 py-2 rounded-xl border focus:outline-none"
+                               style="border-color:#E5E5E5; color:#1A1A1A"
+                               @keydown.enter.prevent="geocodeLocation()">
+                        <div class="flex gap-2">
+                            <button type="button"
+                                    @click="geocodeLocation()"
+                                    :disabled="geocoding"
+                                    class="flex-1 text-xs font-semibold py-2 rounded-xl text-white transition-all active:scale-95"
+                                    style="background:#059669">
+                                <span x-show="!geocoding">Search</span>
+                                <span x-show="geocoding">Searching...</span>
+                            </button>
+                            <button type="button"
+                                    @click="showManual = false"
+                                    class="text-xs px-3 py-2 rounded-xl border"
+                                    style="color:#525252; border-color:#E5E5E5">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+
+
             {{-- Mode toggle --}}
             <div class="flex gap-2 mb-6 p-1 rounded-2xl fade-up-delay-2" style="background:#F0F0EF">
                 <button type="button"
@@ -57,7 +134,7 @@
                         :style="mode === 'nlp'
                             ? 'background:white; color:#1A1A1A; box-shadow: 0 1px 4px rgba(0,0,0,0.08)'
                             : 'color:#A3A3A3'">
-                    💬 Describe it
+                    Describe it
                 </button>
                 <button type="button"
                         @click="mode = 'filter'"
@@ -65,7 +142,7 @@
                         :style="mode === 'filter'
                             ? 'background:white; color:#1A1A1A; box-shadow: 0 1px 4px rgba(0,0,0,0.08)'
                             : 'color:#A3A3A3'">
-                    🎛️ Filter it
+                    Filter it
                 </button>
             </div>
 
@@ -78,6 +155,8 @@
                 <form action="{{ route('restaurants.search') }}" method="POST" @submit="handleSubmit">
                     @csrf
                     <input type="hidden" name="mode" value="nlp">
+                    <input type="hidden" name="latitude"  id="nlp-lat">
+                    <input type="hidden" name="longitude" id="nlp-lng">
 
                     <div class="bg-white rounded-2xl p-5 transition-all duration-200"
                          style="box-shadow: 0 4px 24px rgba(0,0,0,0.08); border: 1.5px solid #F0F0EF"
@@ -97,7 +176,7 @@
                         @enderror
 
                         {{-- Quick tags --}}
-                        <div class="flex flex-wrap gap-2 mt-3">
+                        {{-- <div class="flex flex-wrap gap-2 mt-3">
                             @foreach(['Quick lunch', 'Date night', 'Budget meal', 'Ramen nearby'] as $tag)
                             <button type="button"
                                     @click="$el.closest('form').querySelector('textarea').value = '{{ $tag }}'"
@@ -106,10 +185,10 @@
                                 {{ $tag }}
                             </button>
                             @endforeach
-                        </div>
+                        </div> --}}
 
                         <div class="flex items-center justify-between mt-4 pt-3" style="border-top:1px solid #F5F5F5">
-                            <p class="text-xs" style="color:#D4D4D4">Powered by NLP + SAW</p>
+                            <p class="text-xs" style="color:#D4D4D4"></p>
                             <button type="submit"
                                     class="flex items-center gap-2 text-sm font-semibold text-white px-5 py-2.5 rounded-xl transition-all duration-200 active:scale-95"
                                     style="background:#059669">
@@ -132,6 +211,8 @@
                 <form action="{{ route('restaurants.search') }}" method="POST" @submit="handleSubmit">
                     @csrf
                     <input type="hidden" name="mode" value="filter">
+                    <input type="hidden" name="latitude"  id="filter-lat">
+                    <input type="hidden" name="longitude" id="filter-lng">
                     <input type="hidden" name="food_type" :value="filter.food">
                     <input type="hidden" name="max_price" :value="filter.price">
                     <input type="hidden" name="max_distance" :value="filter.distance">
@@ -325,6 +406,18 @@ function searchForm() {
                 if (!textarea || textarea.value.trim().length < 3) return;
             }
 
+            // Sync location into whichever form is being submitted
+            const lat = document.getElementById('global-latitude')?.value || '-6.2233';
+            const lng = document.getElementById('global-longitude')?.value || '106.6491';
+
+            if (this.mode === 'nlp') {
+                document.getElementById('nlp-lat').value = lat;
+                document.getElementById('nlp-lng').value = lng;
+            } else {
+                document.getElementById('filter-lat').value = lat;
+                document.getElementById('filter-lng').value = lng;
+            }
+
             this.screen = 'processing';
             this.visibleSteps = [];
 
@@ -340,6 +433,71 @@ function searchForm() {
             }, 900);
 
             setTimeout(() => { e.target.submit(); }, 900);
+        }
+    }
+}
+
+function locationPicker() {
+    return {
+        lat: '-6.2233',
+        lng: '106.6491',
+        label: 'Binus Alam Sutera (default)',
+        error: '',
+        detecting: false,
+        geocoding: false,
+        showManual: false,
+        manualSearch: '',
+
+        detectLocation() {
+            if (!navigator.geolocation) {
+                this.error = 'Geolocation not supported by your browser.';
+                return;
+            }
+            this.detecting = true;
+            this.error = '';
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    this.lat   = position.coords.latitude.toString();
+                    this.lng   = position.coords.longitude.toString();
+                    this.label = 'Current location detected';
+                    this.detecting = false;
+                },
+                () => {
+                    this.detecting = false;
+                    this.error = 'Could not detect location. Allow access or set manually.';
+                },
+                { timeout: 10000, enableHighAccuracy: true }
+            );
+        },
+
+        async geocodeLocation() {
+            if (!this.manualSearch.trim()) return;
+            this.geocoding = true;
+            this.error = '';
+
+            try {
+                const apiKey = '{{ config("services.google_places.key") }}';
+                const query  = encodeURIComponent(this.manualSearch);
+                const url    = `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${apiKey}`;
+                const res    = await fetch(url);
+                const data   = await res.json();
+
+                if (data.status === 'OK' && data.results.length > 0) {
+                    const loc      = data.results[0].geometry.location;
+                    this.lat       = loc.lat.toString();
+                    this.lng       = loc.lng.toString();
+                    this.label     = data.results[0].formatted_address;
+                    this.showManual   = false;
+                    this.manualSearch = '';
+                } else {
+                    this.error = 'Location not found. Try a more specific name.';
+                }
+            } catch (e) {
+                this.error = 'Search failed. Check your connection.';
+            }
+
+            this.geocoding = false;
         }
     }
 }

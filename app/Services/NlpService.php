@@ -62,10 +62,10 @@ class NlpService
 
         "FoodType": The TYPE OF FOOD OR CUISINE only. Must be one of:
             ramen, sushi, japanese, indonesian, burger, pizza, chicken, coffee, any
-            - "family dinner" is NOT a food type → return "any"
-            - "date night" is NOT a food type → return "any"
-            - "tonkotsu" → "ramen", "nasi goreng" → "indonesian", "ayam" → "chicken"
-            - If no specific food is mentioned → return "any"
+            - "family dinner" is NOT a food type return "any"
+            - "date night" is NOT a food type return "any"
+            - "tonkotsu" "ramen", "nasi goreng" "indonesian", "ayam" "chicken"
+            - If no specific food is mentioned return "any"
 
         "MaxPrice": Google price level 1-4:
             under 30k / cheap / budget    = 1

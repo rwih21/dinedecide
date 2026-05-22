@@ -35,32 +35,26 @@ class RestaurantController extends Controller
             'query'        => 'nullable|string|min:3|max:255',
             'food_type'    => 'nullable|string',
             'max_price'    => 'nullable|integer|min:1|max:4',
-            'max_distance' => 'nullable|integer'
+            'max_distance' => 'nullable|integer',
+            'latitude'     => 'required|numeric|between:-90,90',
+            'longitude'    => 'required|numeric|between:-180,180',
         ]);
-
-        // dd([
-        //     'mode'       => $request->input('mode'),
-        //     'intent'     => $request->input('mode') === 'nlp'
-        //                     ? $this->nlp->extractIntent($request->input('query'))
-        //                     : ['FoodType' => $request->input('food_type'), 'MaxPrice' => $request->input('max_price'), 'MaxDistance' => $request->input('max_distance')],
-        //     'api_key_set' => !empty(config('services.google_places.key')),
-        // ]);
 
         if ($request->input('mode') === 'nlp' && !$request->filled('query')) {
             return back()->withErrors(['query' => 'Please describe what you\'re craving.']);
         }
 
-        $userLat = -6.2233;
-        $userLng =  106.6491;
+        // Dynamic user location from form
+        $userLat  = (float) $request->input('latitude');
+        $userLng  = (float) $request->input('longitude');
         $rawQuery = '';
-        $relaxed  = false; // tracks if we fell back to Option 2
+        $relaxed  = false;
 
-        // --- Build intent depending on mode ---
+        // --- Build intent ---
         if ($request->input('mode') === 'nlp') {
             $rawQuery = $request->input('query');
             $intent   = $this->nlp->extractIntent($rawQuery);
         } else {
-            // Filter chip mode — intent comes directly from user selections
             $rawQuery = 'Filter: '
                 . ($request->input('food_type', 'any')) . ', '
                 . '$' . str_repeat('$', (int)$request->input('max_price', 4) - 1) . ', '
@@ -75,47 +69,43 @@ class RestaurantController extends Controller
             ];
         }
 
-        // --- Fetch candidates ---
+        // --- Fetch candidates with dynamic location ---
         $candidates = $this->places->getNearbyRestaurants(
             $intent['FoodType'],
-            $intent['MaxDistance']
+            $intent['MaxDistance'],
+            $userLat,
+            $userLng
         );
 
         $candidates = $this->places->applyFoodMatch($candidates, $intent['FoodType']);
-
-        // Apply time warning (soft filter)
         $candidates = $this->places->applyTimeWarning($candidates, $intent['VisitTime']);
 
-// Filter by MaxPrice
-
-        // Filter by MaxPrice
         $candidates = array_values(array_filter(
             $candidates,
             fn($r) => $r['price_level'] <= $intent['MaxPrice']
         ));
 
-        // --- SAW ranking ---
         $ranked = $this->saw->rank($candidates);
 
-        // --- Option 2 fallback: relax food filter if empty ---
+        // --- Fallback ---
         if (empty($ranked)) {
-            $allCandidates = $this->places->getNearbyRestaurants('any', $intent['MaxDistance']);
+            $allCandidates = $this->places->getNearbyRestaurants('any', $intent['MaxDistance'], $userLat, $userLng);
             $allCandidates = $this->places->applyFoodMatch($allCandidates, 'any');
             $allCandidates = $this->places->applyTimeWarning($allCandidates, $intent['VisitTime']);
             $allCandidates = array_values(array_filter(
                 $allCandidates,
                 fn($r) => $r['price_level'] <= $intent['MaxPrice']
             ));
+
             $ranked  = $this->saw->rank($allCandidates);
             $relaxed = true;
         }
 
-        // If still empty after fallback, truly nothing nearby
         if (empty($ranked)) {
             return back()->with('error', 'No restaurants found in this area. Try increasing your distance.');
         }
 
-        // --- Save to database ---
+        // --- Save ---
         $search = SearchHistory::create([
             'user_id'             => Auth::id(),
             'raw_query'           => $rawQuery,
@@ -144,7 +134,9 @@ class RestaurantController extends Controller
             'alternatives',
             'intent',
             'rawQuery',
-            'relaxed'
+            'relaxed',
+            'userLat',
+            'userLng'
         ));
     }
 }

@@ -11,7 +11,7 @@
                 <p class="text-gray-600 mb-4">Ready to find your next meal?</p>
                 <a href="{{ route('restaurants.index') }}"
                    class="inline-block bg-[#059669] hover:bg-emerald-500 text-white font-medium px-6 py-3 rounded-xl transition-colors">
-                    Start searching →
+                    Start searching
                 </a>
             </div>
         </div>

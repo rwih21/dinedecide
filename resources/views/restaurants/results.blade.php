@@ -65,8 +65,8 @@
                             @endif
                         </div>
                         <div class="text-right shrink-0">
-                            <p class="text-2xl font-bold text-gray-800">{{ number_format($topPick['saw_score'] * 100, 1) }}</p>
-                            <p class="text-xs text-gray-400">SAW score</p>
+                            <p class="text-2xl font-bold text-gray-800">{{ round($topPick['saw_score'] * 100) }}%</p>
+                            <p class="text-xs text-gray-400">Match</p>
                         </div>
                     </div>
 
@@ -79,19 +79,19 @@
                     </button>
 
                     <div x-show="showMath" x-transition class="mt-3 bg-gray-50 rounded-xl p-4 space-y-2">
-                        <p class="text-xs font-medium text-gray-500 mb-2">SAW Breakdown — Vᵢ = Σ wⱼ · rᵢⱼ</p>
+                        <p class="text-xs font-medium text-gray-500 mb-2">Recommendation Breakdown</p>
                         @php $b = $topPick['criteria_breakdown']; @endphp
                         <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                            <div>C1 Distance <span class="text-gray-400">(w=0.35)</span></div>
+                            <div>Distance <span class="text-gray-400">(w=0.35)</span></div>
                             <div class="text-right font-mono">{{ $b['C1_distance'] }} × 0.35 = {{ number_format($b['C1_distance'] * 0.35, 4) }}</div>
-                            <div>C2 Food Match <span class="text-gray-400">(w=0.30)</span></div>
+                            <div>Food Match <span class="text-gray-400">(w=0.30)</span></div>
                             <div class="text-right font-mono">{{ $b['C2_food_match'] }} × 0.30 = {{ number_format($b['C2_food_match'] * 0.30, 4) }}</div>
-                            <div>C3 Rating <span class="text-gray-400">(w=0.20)</span></div>
+                            <div>Rating <span class="text-gray-400">(w=0.20)</span></div>
                             <div class="text-right font-mono">{{ $b['C3_rating'] }} × 0.20 = {{ number_format($b['C3_rating'] * 0.20, 4) }}</div>
                             <div class="text-gray-400 col-span-2 font-mono" style="font-size:10px">
-                                ★ {{ $b['raw_rating'] }} raw · {{ $b['review_count'] }} reviews → adjusted {{ $b['adjusted_rating'] }}
+                                ★ {{ $b['raw_rating'] }} raw · {{ $b['review_count'] }} reviews adjusted {{ $b['adjusted_rating'] }}
                             </div>
-                            <div>C4 Price <span class="text-gray-400">(w=0.15)</span></div>
+                            <div>Price <span class="text-gray-400">(w=0.15)</span></div>
                             <div class="text-right font-mono">{{ $b['C4_price_level'] }} × 0.15 = {{ number_format($b['C4_price_level'] * 0.15, 4) }}</div>
                         </div>
                         <div class="border-t border-gray-200 pt-2 flex justify-between text-xs font-semibold text-gray-700">
@@ -129,8 +129,8 @@
                                 @endif
                             </div>
                             <div class="text-right shrink-0">
-                                <p class="text-lg font-semibold text-gray-700">{{ number_format($alt['saw_score'] * 100, 1) }}</p>
-                                <p class="text-xs text-gray-400">score</p>
+                                <p class="text-lg font-semibold text-gray-700">{{ round($alt['saw_score'] * 100) }}%</p>
+                                <p class="text-xs text-gray-400">Match</p>
                             </div>
                         </div>
 
@@ -144,13 +144,13 @@
                         <div x-show="showMath" x-transition class="mt-2 bg-gray-50 rounded-xl p-3 space-y-1">
                             @php $b = $alt['criteria_breakdown']; @endphp
                             <div class="grid grid-cols-2 gap-1 text-xs text-gray-600">
-                                <div>C1 Distance</div><div class="text-right font-mono">{{ number_format($b['C1_distance'] * 0.35, 4) }}</div>
-                                <div>C2 Food Match</div><div class="text-right font-mono">{{ number_format($b['C2_food_match'] * 0.30, 4) }}</div>
-                                <div>C3 Rating</div><div class="text-right font-mono">{{ number_format($b['C3_rating'] * 0.20, 4) }}</div>
+                                <div>Distance</div><div class="text-right font-mono">{{ number_format($b['C1_distance'] * 0.35, 4) }}</div>
+                                <div>Food Match</div><div class="text-right font-mono">{{ number_format($b['C2_food_match'] * 0.30, 4) }}</div>
+                                <div>Rating</div><div class="text-right font-mono">{{ number_format($b['C3_rating'] * 0.20, 4) }}</div>
                                 <div class="text-gray-400 col-span-2 font-mono" style="font-size:10px">
-                                    ★ {{ $b['raw_rating'] }} · {{ $b['review_count'] }} reviews → adj. {{ $b['adjusted_rating'] }}
+                                    ★ {{ $b['raw_rating'] }} · {{ $b['review_count'] }} reviews adj. {{ $b['adjusted_rating'] }}
                                 </div>
-                                <div>C4 Price</div><div class="text-right font-mono">{{ number_format($b['C4_price_level'] * 0.15, 4) }}</div>
+                                <div>Price</div><div class="text-right font-mono">{{ number_format($b['C4_price_level'] * 0.15, 4) }}</div>
                             </div>
                             <div class="border-t border-gray-200 pt-1 flex justify-between text-xs font-semibold text-gray-700">
                                 <span>Vᵢ</span>
