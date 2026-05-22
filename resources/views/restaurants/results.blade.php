@@ -1,102 +1,146 @@
 <x-app-layout>
-    <div class="min-h-screen bg-gray-50 px-4 py-10">
+    <div class="min-h-screen px-4 py-10" style="background:#F9F9F8">
         <div class="max-w-2xl mx-auto">
 
             {{-- Back + query header --}}
             <div class="mb-8">
                 <a href="{{ route('restaurants.index') }}"
-                   class="text-sm text-gray-400 hover:text-gray-600 transition-colors">
-                    ← New search
+                   class="inline-flex items-center gap-2 text-sm font-medium text-neutral-400 hover:text-emerald-600 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                    New search
                 </a>
-                <p class="text-gray-400 text-sm mt-3">Results for</p>
-                <h2 class="text-xl font-semibold text-gray-800 mt-0.5">"{{ $rawQuery }}"</h2>
-                <div class="flex gap-2 mt-2 flex-wrap">
-                    <span class="text-xs bg-gray-100 text-gray-500 px-3 py-1 rounded-full">
+                
+                <div class="mt-5">
+                    <p class="text-neutral-400 text-xs font-bold uppercase tracking-widest">Results for</p>
+                    <h2 class="text-2xl font-bold text-neutral-900 mt-1 leading-tight">"{{ $rawQuery }}"</h2>
+                </div>
+
+                {{-- Color-coded intent pills --}}
+                <div class="flex gap-2 mt-4 flex-wrap">
+                    <span class="text-xs font-medium bg-orange-50 text-orange-700 px-3 py-1.5 rounded-lg border border-orange-100">
                         🍜 {{ $intent['FoodType'] }}
                     </span>
-                    <span class="text-xs bg-gray-100 text-gray-500 px-3 py-1 rounded-full">
-                        💰 Price level ≤ {{ $intent['MaxPrice'] }}
+                    <span class="text-xs font-medium bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg border border-emerald-100">
+                        💰 Up to {{ $intent['MaxPrice'] }}
                     </span>
-                    <span class="text-xs bg-gray-100 text-gray-500 px-3 py-1 rounded-full">
+                    <span class="text-xs font-medium bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-100">
                         📍 Within {{ number_format($intent['MaxDistance'] / 1000, 1) }}km
                     </span>
                     @if($intent['Occasion'] !== 'any')
-                    <span class="text-xs bg-gray-100 text-gray-500 px-3 py-1 rounded-full">
+                    <span class="text-xs font-medium bg-purple-50 text-purple-700 px-3 py-1.5 rounded-lg border border-purple-100">
                         🎭 {{ ucfirst($intent['Occasion']) }}
                     </span>
                     @endif
                     @if($intent['VisitTime'] !== 'now')
-                    <span class="text-xs bg-gray-100 text-gray-500 px-3 py-1 rounded-full">
+                    <span class="text-xs font-medium bg-rose-50 text-rose-700 px-3 py-1.5 rounded-lg border border-rose-100">
                         🕐 {{ ucfirst($intent['VisitTime']) }}
                     </span>
                     @endif
                 </div>
             </div>
 
-            {{-- Relaxed --}}
+            {{-- Relaxed Warning --}}
             @if($relaxed)
-            <div class="mb-4 px-4 py-3 rounded-xl text-sm"
+            <div class="mb-6 px-4 py-3 rounded-xl text-sm font-medium flex items-start gap-3"
                  style="background:#FFFBEB; color:#D97706; border:1px solid #FDE68A">
-                No exact match found nearby — showing top rated options instead.
+                <span>⚠️</span>
+                <p>No exact match found nearby. Showing the best rated alternatives instead.</p>
             </div>
             @endif
 
             {{-- Top Pick --}}
-            <div class="mb-6">
-                <p class="text-xs font-medium text-gray-400 uppercase tracking-widest mb-3">Top Pick</p>
-                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5"
+            <div class="mb-8">
+                <div class="flex items-center justify-between mb-3">
+                    <p class="text-xs font-bold text-emerald-600 uppercase tracking-widest">Top Pick</p>
+                </div>
+                
+                {{-- Highlighted Card --}}
+                <div class="bg-white rounded-2xl shadow-sm p-4 sm:p-6 relative overflow-hidden transition-all"
+                     style="border: 2px solid #10B981; box-shadow: 0 4px 20px rgba(16, 185, 129, 0.08);"
                      x-data="{ showMath: false }">
-                    <div class="flex items-start justify-between gap-4">
-                        <div>
-                            <div class="flex items-center gap-2 mb-1">
-                                <span class="text-xs font-medium bg-gray-800 text-white px-2 py-0.5 rounded-full">#1</span>
-                                <h3 class="text-lg font-semibold text-gray-800">{{ $topPick['name'] }}</h3>
+                    
+                    <div class="flex flex-col sm:flex-row gap-5">
+                        
+                        {{-- Top Pick Image (Hero-ish) --}}
+                        <div class="relative shrink-0 w-full sm:w-40 h-48 sm:h-auto rounded-xl overflow-hidden bg-neutral-100">
+                            {{-- Placeholder image, replace src with $topPick['image_url'] later --}}
+                            <img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80" 
+                                 alt="{{ $topPick['name'] }}" 
+                                 class="absolute inset-0 w-full h-full object-cover">
+                            
+                            {{-- Floating #1 Badge --}}
+                            <div class="absolute top-3 left-3 flex items-center justify-center w-7 h-7 bg-emerald-600 text-white text-xs font-bold rounded-full shadow-md">
+                                1
                             </div>
-                            <div class="flex flex-wrap gap-2 mt-2">
-                                <span class="text-xs text-gray-500">⭐ {{ $topPick['rating'] }}</span>
-                                <span class="text-xs text-gray-500">📍 {{ number_format($topPick['distance'], 0) }}m away</span>
-                                <span class="text-xs text-gray-500">💰 {{ str_repeat('$', $topPick['price_level']) }}</span>
-                            </div>
-                            @if($topPick['time_warning'] ?? null)
-                            <span class="text-xs px-2 py-0.5 rounded-full font-medium mt-1 inline-block"
-                                style="background:#FEF3C7; color:#D97706">
-                                ⚠ {{ $topPick['time_warning'] }}
-                            </span>
-                            @endif
                         </div>
-                        <div class="text-right shrink-0">
-                            <p class="text-2xl font-bold text-gray-800">{{ round($topPick['saw_score'] * 100) }}%</p>
-                            <p class="text-xs text-gray-400">Match</p>
+
+                        {{-- Top Pick Details --}}
+                        <div class="flex-1 flex flex-col justify-between py-1">
+                            <div>
+                                <h3 class="text-xl font-bold text-neutral-900 leading-tight">{{ $topPick['name'] }}</h3>
+                                
+                                <div class="flex flex-wrap items-center gap-3 mt-3">
+                                    <span class="flex items-center gap-1 text-sm font-medium text-neutral-700 bg-neutral-100 px-2.5 py-1 rounded-lg">⭐ {{ $topPick['rating'] }}</span>
+                                    <span class="text-sm font-medium text-neutral-500">📍 {{ number_format($topPick['distance'], 0) }}m</span>
+                                    <span class="text-sm font-medium text-neutral-400">•</span>
+                                    <span class="text-sm font-medium text-neutral-500 font-mono tracking-widest">{{ str_repeat('$', $topPick['price_level']) }}</span>
+                                </div>
+
+                                @if($topPick['time_warning'] ?? null)
+                                <div class="mt-3 inline-flex">
+                                    <span class="text-xs px-3 py-1 rounded-lg font-bold border" style="background:#FEF3C7; color:#D97706; border-color:#FDE68A">
+                                        ⚠ {{ $topPick['time_warning'] }}
+                                    </span>
+                                </div>
+                                @endif
+                            </div>
+                            
+                            {{-- Score Badge & CTA --}}
+                            <div class="flex items-end justify-between border-t border-neutral-100 pt-4 mt-4">
+                                <div class="text-left">
+                                    <p class="text-3xl font-black text-emerald-600 leading-none">{{ round($topPick['saw_score'] * 100) }}%</p>
+                                    <p class="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-1">Match</p>
+                                </div>
+                                <a href="https://maps.google.com/?q={{ urlencode($topPick['name']) }}" target="_blank"
+                                   class="bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors">
+                                    Directions
+                                </a>
+                            </div>
                         </div>
                     </div>
 
                     {{-- Toggle math --}}
-                    <button
-                        @click="showMath = !showMath"
-                        class="mt-4 text-xs text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1"
-                    >
-                        <span x-text="showMath ? '▾ Hide calculation' : '▸ Show calculation'"></span>
-                    </button>
+                    <div class="mt-5 pt-4 border-t border-neutral-100">
+                        <button @click="showMath = !showMath" class="w-full flex items-center justify-between text-xs font-bold text-neutral-400 hover:text-emerald-600 transition-colors uppercase tracking-widest">
+                            <span>Decision Logic (SAW)</span>
+                            <span x-text="showMath ? 'Hide' : 'View'"></span>
+                        </button>
 
-                    <div x-show="showMath" x-transition class="mt-3 bg-gray-50 rounded-xl p-4 space-y-2">
-                        <p class="text-xs font-medium text-gray-500 mb-2">Recommendation Breakdown</p>
-                        @php $b = $topPick['criteria_breakdown']; @endphp
-                        <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                            <div>Distance <span class="text-gray-400">(w=0.35)</span></div>
-                            <div class="text-right font-mono">{{ $b['C1_distance'] }} × 0.35 = {{ number_format($b['C1_distance'] * 0.35, 4) }}</div>
-                            <div>Food Match <span class="text-gray-400">(w=0.30)</span></div>
-                            <div class="text-right font-mono">{{ $b['C2_food_match'] }} × 0.30 = {{ number_format($b['C2_food_match'] * 0.30, 4) }}</div>
-                            <div>Rating <span class="text-gray-400">(w=0.20)</span></div>
-                            <div class="text-right font-mono">{{ $b['C3_rating'] }} × 0.20 = {{ number_format($b['C3_rating'] * 0.20, 4) }}</div>
-                            <div class="text-gray-400 col-span-2 font-mono" style="font-size:10px">
-                                ★ {{ $b['raw_rating'] }} raw · {{ $b['review_count'] }} reviews adjusted {{ $b['adjusted_rating'] }}
+                        {{-- Beautiful Data Grid for Math --}}
+                        <div x-show="showMath" x-collapse.duration.300ms class="mt-4">
+                            @php $b = $topPick['criteria_breakdown']; @endphp
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                <div class="bg-neutral-50 rounded-xl p-3 border border-neutral-100">
+                                    <p class="text-[10px] text-neutral-400 uppercase font-bold mb-1">Distance</p>
+                                    <p class="text-sm font-mono font-bold text-neutral-700">{{ number_format($b['C1_distance'] * 0.35, 4) }}</p>
+                                </div>
+                                <div class="bg-neutral-50 rounded-xl p-3 border border-neutral-100">
+                                    <p class="text-[10px] text-neutral-400 uppercase font-bold mb-1">Food Match</p>
+                                    <p class="text-sm font-mono font-bold text-neutral-700">{{ number_format($b['C2_food_match'] * 0.30, 4) }}</p>
+                                </div>
+                                <div class="bg-neutral-50 rounded-xl p-3 border border-neutral-100">
+                                    <p class="text-[10px] text-neutral-400 uppercase font-bold mb-1">Rating</p>
+                                    <p class="text-sm font-mono font-bold text-neutral-700">{{ number_format($b['C3_rating'] * 0.20, 4) }}</p>
+                                </div>
+                                <div class="bg-neutral-50 rounded-xl p-3 border border-neutral-100">
+                                    <p class="text-[10px] text-neutral-400 uppercase font-bold mb-1">Price</p>
+                                    <p class="text-sm font-mono font-bold text-neutral-700">{{ number_format($b['C4_price_level'] * 0.15, 4) }}</p>
+                                </div>
                             </div>
-                            <div>Price <span class="text-gray-400">(w=0.15)</span></div>
-                            <div class="text-right font-mono">{{ $b['C4_price_level'] }} × 0.15 = {{ number_format($b['C4_price_level'] * 0.15, 4) }}</div>
-                        </div>
-                        <div class="border-t border-gray-200 pt-2 flex justify-between text-xs font-semibold text-gray-700">
-                            <span>Final Score (Vᵢ)</span>
-                            <span class="font-mono">{{ $topPick['saw_score'] }}</span>
+                            <div class="flex justify-between items-center mt-3 px-1">
+                                <p class="text-[10px] text-neutral-400">Raw Rating: {{ $b['raw_rating'] }} ({{ $b['review_count'] }} reviews)</p>
+                                <p class="text-[10px] font-bold text-neutral-500 uppercase">Final: {{ $topPick['saw_score'] }}</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -105,56 +149,69 @@
             {{-- Alternatives --}}
             @if(!empty($alternatives))
             <div>
-                <p class="text-xs font-medium text-gray-400 uppercase tracking-widest mb-3">Alternatives</p>
+                <p class="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-4">Other Good Options</p>
                 <div class="space-y-3">
                     @foreach($alternatives as $alt)
-                    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4"
+                    <div class="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 hover:border-neutral-300 transition-colors"
                          x-data="{ showMath: false }">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <div class="flex items-center gap-2 mb-1">
-                                    <span class="text-xs text-gray-400 font-medium">#{{ $alt['rank'] }}</span>
-                                    <h3 class="text-base font-medium text-gray-800">{{ $alt['name'] }}</h3>
+                        
+                        <div class="flex gap-4">
+                            {{-- Thumbnail Image --}}
+                            <img src="https://images.unsplash.com/photo-1552566626-52f8b828add9?w=300&q=80" 
+                                 alt="{{ $alt['name'] }}" 
+                                 class="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover shrink-0 bg-neutral-100">
+
+                            <div class="flex-1 flex flex-col sm:flex-row justify-between gap-3">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-xs font-bold text-neutral-400">#{{ $alt['rank'] }}</span>
+                                        <h3 class="text-base font-bold text-neutral-800">{{ $alt['name'] }}</h3>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-2 mt-1">
+                                        <span class="text-xs font-medium text-neutral-700 bg-neutral-100 px-2 py-0.5 rounded-md">⭐ {{ $alt['rating'] }}</span>
+                                        <span class="text-xs font-medium text-neutral-500">📍 {{ number_format($alt['distance'], 0) }}m</span>
+                                        <span class="text-xs font-medium text-neutral-400">•</span>
+                                        <span class="text-xs font-medium text-neutral-500 font-mono tracking-widest">{{ str_repeat('$', $alt['price_level']) }}</span>
+                                    </div>
+                                    @if($alt['time_warning'] ?? null)
+                                    <span class="text-[10px] px-2 py-0.5 rounded-md font-bold mt-2 inline-block border"
+                                          style="background:#FEF3C7; color:#D97706; border-color:#FDE68A">
+                                        ⚠ {{ $alt['time_warning'] }}
+                                    </span>
+                                    @endif
                                 </div>
-                                <div class="flex flex-wrap gap-2">
-                                    <span class="text-xs text-gray-500">⭐ {{ $alt['rating'] }}</span>
-                                    <span class="text-xs text-gray-500">📍 {{ number_format($alt['distance'], 0) }}m</span>
-                                    <span class="text-xs text-gray-500">💰 {{ str_repeat('$', $alt['price_level']) }}</span>
+                                
+                                <div class="flex items-center justify-between sm:justify-end sm:flex-col gap-2 border-t sm:border-t-0 border-neutral-100 pt-3 sm:pt-0">
+                                    <div class="text-left sm:text-right">
+                                        <p class="text-lg font-bold text-neutral-700">{{ round($alt['saw_score'] * 100) }}%</p>
+                                    </div>
+                                    <button @click="showMath = !showMath" class="text-[10px] font-bold text-neutral-400 uppercase tracking-widest hover:text-neutral-600 bg-neutral-50 px-3 py-1.5 rounded-lg border border-neutral-200 shrink-0">
+                                        <span x-text="showMath ? 'Hide' : 'Math'"></span>
+                                    </button>
                                 </div>
-                                @if($alt['time_warning'] ?? null)
-                                <span class="text-xs px-2 py-0.5 rounded-full font-medium mt-1 inline-block"
-                                    style="background:#FEF3C7; color:#D97706">
-                                    ⚠ {{ $alt['time_warning'] }}
-                                </span>
-                                @endif
-                            </div>
-                            <div class="text-right shrink-0">
-                                <p class="text-lg font-semibold text-gray-700">{{ round($alt['saw_score'] * 100) }}%</p>
-                                <p class="text-xs text-gray-400">Match</p>
                             </div>
                         </div>
 
-                        <button
-                            @click="showMath = !showMath"
-                            class="mt-3 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-                        >
-                            <span x-text="showMath ? '▾ Hide' : '▸ Show math'"></span>
-                        </button>
-
-                        <div x-show="showMath" x-transition class="mt-2 bg-gray-50 rounded-xl p-3 space-y-1">
+                        {{-- Alternative Math Grid --}}
+                        <div x-show="showMath" x-collapse.duration.300ms class="mt-4 pt-3 border-t border-neutral-100">
                             @php $b = $alt['criteria_breakdown']; @endphp
-                            <div class="grid grid-cols-2 gap-1 text-xs text-gray-600">
-                                <div>Distance</div><div class="text-right font-mono">{{ number_format($b['C1_distance'] * 0.35, 4) }}</div>
-                                <div>Food Match</div><div class="text-right font-mono">{{ number_format($b['C2_food_match'] * 0.30, 4) }}</div>
-                                <div>Rating</div><div class="text-right font-mono">{{ number_format($b['C3_rating'] * 0.20, 4) }}</div>
-                                <div class="text-gray-400 col-span-2 font-mono" style="font-size:10px">
-                                    ★ {{ $b['raw_rating'] }} · {{ $b['review_count'] }} reviews adj. {{ $b['adjusted_rating'] }}
+                            <div class="grid grid-cols-4 gap-2">
+                                <div class="bg-neutral-50 rounded-lg p-2 text-center">
+                                    <p class="text-[9px] text-neutral-400 uppercase font-bold mb-0.5">Distance</p>
+                                    <p class="text-xs font-mono font-bold text-neutral-600">{{ number_format($b['C1_distance'] * 0.35, 4) }}</p>
                                 </div>
-                                <div>Price</div><div class="text-right font-mono">{{ number_format($b['C4_price_level'] * 0.15, 4) }}</div>
-                            </div>
-                            <div class="border-t border-gray-200 pt-1 flex justify-between text-xs font-semibold text-gray-700">
-                                <span>Vᵢ</span>
-                                <span class="font-mono">{{ $alt['saw_score'] }}</span>
+                                <div class="bg-neutral-50 rounded-lg p-2 text-center">
+                                    <p class="text-[9px] text-neutral-400 uppercase font-bold mb-0.5">F. Match</p>
+                                    <p class="text-xs font-mono font-bold text-neutral-600">{{ number_format($b['C2_food_match'] * 0.30, 4) }}</p>
+                                </div>
+                                <div class="bg-neutral-50 rounded-lg p-2 text-center">
+                                    <p class="text-[9px] text-neutral-400 uppercase font-bold mb-0.5">Rate</p>
+                                    <p class="text-xs font-mono font-bold text-neutral-600">{{ number_format($b['C3_rating'] * 0.20, 4) }}</p>
+                                </div>
+                                <div class="bg-neutral-50 rounded-lg p-2 text-center">
+                                    <p class="text-[9px] text-neutral-400 uppercase font-bold mb-0.5">Price</p>
+                                    <p class="text-xs font-mono font-bold text-neutral-600">{{ number_format($b['C4_price_level'] * 0.15, 4) }}</p>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -44,7 +44,7 @@
             <div class="mb-8 fade-up-delay-1">
                 <h1 class="font-bold leading-tight" style="font-size:36px; color:#1A1A1A; letter-spacing:-0.02em">
                     Where should<br>we eat
-                    <em style="font-family: Georgia, serif; font-style: italic; color:#059669">tonight?</em>
+                    <em style="font-family: Georgia, serif; font-style: italic; color:#059669">today?</em>
                 </h1>
                 <p class="mt-2 text-sm" style="color:#525252">Choose how you want to decide.</p>
             </div>
@@ -158,18 +158,20 @@
                     <input type="hidden" name="latitude"  id="nlp-lat">
                     <input type="hidden" name="longitude" id="nlp-lng">
 
-                    <div class="bg-white rounded-2xl p-5 transition-all duration-200"
+                    <div class="rounded-2xl transition-all duration-200"
                          style="box-shadow: 0 4px 24px rgba(0,0,0,0.08); border: 1.5px solid #F0F0EF"
                          :style="focused ? 'border-color:#059669' : ''">
 
-                        <textarea
+                        <input
+                            type="text"
                             name="query"
-                            rows="3"
+                            {{-- rows="1" --}}
                             @focus="focused = true"
                             @blur="focused = false"
                             placeholder="e.g. I want spicy ramen near Binus under 50k..."
-                            class="w-full text-sm resize-none focus:outline-none bg-transparent"
-                            style="color:#1A1A1A"></textarea>
+                            class="w-full bg-white border border-neutral-200 rounded-2xl py-5 pl-6 pr-14 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition duration-300 ease-in-out text-sm resize-none"
+                            style="color:#1A1A1A"
+                        />
 
                         @error('query')
                             <p class="text-xs mt-1" style="color:#EF4444">{{ $message }}</p>
@@ -187,7 +189,7 @@
                             @endforeach
                         </div> --}}
 
-                        <div class="flex items-center justify-between mt-4 pt-3" style="border-top:1px solid #F5F5F5">
+                        <div class="flex items-center justify-between pt-3">
                             <p class="text-xs" style="color:#D4D4D4"></p>
                             <button type="submit"
                                     class="flex items-center gap-2 text-sm font-semibold text-white px-5 py-2.5 rounded-xl transition-all duration-200 active:scale-95"
@@ -401,9 +403,10 @@ function searchForm() {
             return `${foodLabels[this.filter.food]} · ${price} · ${distLabels[this.filter.distance]}`;
         },
         handleSubmit(e) {
+            // Submit NLP
             if (this.mode === 'nlp') {
-                const textarea = e.target.querySelector('textarea[name="query"]');
-                if (!textarea || textarea.value.trim().length < 3) return;
+                const inputBox = e.target.querySelector('input[name="query"]');
+                if (!inputBox || inputBox.value.trim().length < 3) return;
             }
 
             // Sync location into whichever form is being submitted
