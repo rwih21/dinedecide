@@ -20,9 +20,11 @@
                     <span class="text-xs font-medium bg-orange-50 text-orange-700 px-3 py-1.5 rounded-lg border border-orange-100">
                         🍜 {{ $intent['FoodType'] }}
                     </span>
+                    @if($intent['MaxBudget'] > 0)
                     <span class="text-xs font-medium bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg border border-emerald-100">
-                        💰 Up to {{ $intent['MaxPrice'] }}
+                        💰 Up to {{ number_format($intent['MaxBudget'], 0, ',', '.') }}
                     </span>
+                    @endif
                     <span class="text-xs font-medium bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-100">
                         📍 Within {{ number_format($intent['MaxDistance'] / 1000, 1) }}km
                     </span>
@@ -44,37 +46,26 @@
             <div class="mb-6 px-4 py-3 rounded-xl text-sm font-medium flex items-start gap-3"
                  style="background:#FFFBEB; color:#D97706; border:1px solid #FDE68A">
                 <span>⚠️</span>
-                <p>No exact match found nearby. Showing the best rated alternatives instead.</p>
+                <p>No exact match found nearby. Showing the best rated alternative instead.</p>
             </div>
             @endif
 
-            {{-- Top Pick --}}
             <div class="mb-8">
                 <div class="flex items-center justify-between mb-3">
-                    <p class="text-xs font-bold text-emerald-600 uppercase tracking-widest">Top Pick</p>
+                    <p class="text-xs font-bold text-emerald-600 uppercase tracking-widest">Your Recommendation</p>
                 </div>
                 
-                {{-- Highlighted Card --}}
                 <div class="bg-white rounded-2xl shadow-sm p-4 sm:p-6 relative overflow-hidden transition-all"
                      style="border: 2px solid #10B981; box-shadow: 0 4px 20px rgba(16, 185, 129, 0.08);"
                      x-data="{ showMath: false }">
                     
                     <div class="flex flex-col sm:flex-row gap-5">
-                        
-                        {{-- Top Pick Image (Hero-ish) --}}
                         <div class="relative shrink-0 w-full sm:w-40 h-48 sm:h-auto rounded-xl overflow-hidden bg-neutral-100">
-                            {{-- Placeholder image, replace src with $topPick['image_url'] later --}}
-                            <img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80" 
+                            <img src="{{ $topPick['photo_url'] ?? 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80' }}" 
                                  alt="{{ $topPick['name'] }}" 
                                  class="absolute inset-0 w-full h-full object-cover">
-                            
-                            {{-- Floating #1 Badge --}}
-                            <div class="absolute top-3 left-3 flex items-center justify-center w-7 h-7 bg-emerald-600 text-white text-xs font-bold rounded-full shadow-md">
-                                1
-                            </div>
                         </div>
 
-                        {{-- Top Pick Details --}}
                         <div class="flex-1 flex flex-col justify-between py-1">
                             <div>
                                 <h3 class="text-xl font-bold text-neutral-900 leading-tight">{{ $topPick['name'] }}</h3>
@@ -83,11 +74,24 @@
                                     <span class="flex items-center gap-1 text-sm font-medium text-neutral-700 bg-neutral-100 px-2.5 py-1 rounded-lg">⭐ {{ $topPick['rating'] }}</span>
                                     <span class="text-sm font-medium text-neutral-500">📍 {{ number_format($topPick['distance'], 0) }}m</span>
                                     <span class="text-sm font-medium text-neutral-400">•</span>
-                                    <span class="text-sm font-medium text-neutral-500 font-mono tracking-widest">{{ str_repeat('$', $topPick['price_level']) }}</span>
+                                    
+                                    {{-- Replaced the str_repeat with the safe price_display string --}}
+                                    <span class="text-sm font-medium text-emerald-600">{{ $topPick['price_display'] }}</span>
                                 </div>
 
-                                @if($topPick['time_warning'] ?? null)
+                                {{-- Render the Smart Pricing Feedback! --}}
+                                @if(!empty($topPick['price_comment']))
                                 <div class="mt-3 inline-flex">
+                                    <span class="text-xs px-3 py-1 rounded-lg font-bold border 
+                                        {{ $topPick['price_comment'] === 'Affordable' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+                                          ($topPick['price_comment'] === 'Very expensive' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-amber-50 text-amber-700 border-amber-200') }}">
+                                        {{ $topPick['price_comment'] === 'Affordable' ? '✓' : '⚠' }} {{ $topPick['price_comment'] }}
+                                    </span>
+                                </div>
+                                @endif
+
+                                @if($topPick['time_warning'] ?? null)
+                                <div class="mt-2 inline-flex">
                                     <span class="text-xs px-3 py-1 rounded-lg font-bold border" style="background:#FEF3C7; color:#D97706; border-color:#FDE68A">
                                         ⚠ {{ $topPick['time_warning'] }}
                                     </span>
@@ -95,7 +99,6 @@
                                 @endif
                             </div>
                             
-                            {{-- Score Badge & CTA --}}
                             <div class="flex items-end justify-between border-t border-neutral-100 pt-4 mt-4">
                                 <div class="text-left">
                                     <p class="text-3xl font-black text-emerald-600 leading-none">{{ round($topPick['saw_score'] * 100) }}%</p>
@@ -109,14 +112,12 @@
                         </div>
                     </div>
 
-                    {{-- Toggle math --}}
                     <div class="mt-5 pt-4 border-t border-neutral-100">
                         <button @click="showMath = !showMath" class="w-full flex items-center justify-between text-xs font-bold text-neutral-400 hover:text-emerald-600 transition-colors uppercase tracking-widest">
                             <span>Decision Logic (SAW)</span>
                             <span x-text="showMath ? 'Hide' : 'View'"></span>
                         </button>
 
-                        {{-- Beautiful Data Grid for Math --}}
                         <div x-show="showMath" x-collapse.duration.300ms class="mt-4">
                             @php $b = $topPick['criteria_breakdown']; @endphp
                             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -134,21 +135,20 @@
                                 </div>
                                 <div class="bg-neutral-50 rounded-xl p-3 border border-neutral-100">
                                     <p class="text-[10px] text-neutral-400 uppercase font-bold mb-1">Price</p>
-                                    <p class="text-sm font-mono font-bold text-neutral-700">{{ number_format($b['C4_price_level'] * 0.15, 4) }}</p>
+                                    <p class="text-sm font-mono font-bold text-neutral-700">{{ number_format($b['C4_price'] * 0.15, 4) }}</p>
                                 </div>
                             </div>
                             <div class="flex justify-between items-center mt-3 px-1">
-                                <p class="text-[10px] text-neutral-400">Raw Rating: {{ $b['raw_rating'] }} ({{ $b['review_count'] }} reviews)</p>
+                                <p class="text-[10px] text-neutral-400">Exact Price Used: Rp {{ number_format($b['exact_price'], 0, ',', '.') }}</p>
                                 <p class="text-[10px] font-bold text-neutral-500 uppercase">Final: {{ $topPick['saw_score'] }}</p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-
             {{-- Alternatives --}}
             @if(!empty($alternatives))
-            <div>
+            <div class="mt-8">
                 <p class="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-4">Other Good Options</p>
                 <div class="space-y-3">
                     @foreach($alternatives as $alt)
@@ -156,8 +156,7 @@
                          x-data="{ showMath: false }">
                         
                         <div class="flex gap-4">
-                            {{-- Thumbnail Image --}}
-                            <img src="https://images.unsplash.com/photo-1552566626-52f8b828add9?w=300&q=80" 
+                            <img src="{{ $alt['photo_url'] ?? 'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=300&q=80' }}" 
                                  alt="{{ $alt['name'] }}" 
                                  class="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover shrink-0 bg-neutral-100">
 
@@ -171,12 +170,14 @@
                                         <span class="text-xs font-medium text-neutral-700 bg-neutral-100 px-2 py-0.5 rounded-md">⭐ {{ $alt['rating'] }}</span>
                                         <span class="text-xs font-medium text-neutral-500">📍 {{ number_format($alt['distance'], 0) }}m</span>
                                         <span class="text-xs font-medium text-neutral-400">•</span>
-                                        <span class="text-xs font-medium text-neutral-500 font-mono tracking-widest">{{ str_repeat('$', $alt['price_level']) }}</span>
+                                        <span class="text-xs font-medium text-emerald-600">{{ $alt['price_display'] }}</span>
                                     </div>
-                                    @if($alt['time_warning'] ?? null)
-                                    <span class="text-[10px] px-2 py-0.5 rounded-md font-bold mt-2 inline-block border"
-                                          style="background:#FEF3C7; color:#D97706; border-color:#FDE68A">
-                                        ⚠ {{ $alt['time_warning'] }}
+                                    
+                                    @if(!empty($alt['price_comment']))
+                                    <span class="text-[10px] px-2 py-0.5 rounded-md font-bold mt-2 inline-block border 
+                                        {{ $alt['price_comment'] === 'Affordable' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+                                          ($alt['price_comment'] === 'Very expensive' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-amber-50 text-amber-700 border-amber-200') }}">
+                                        {{ $alt['price_comment'] }}
                                     </span>
                                     @endif
                                 </div>
@@ -210,7 +211,7 @@
                                 </div>
                                 <div class="bg-neutral-50 rounded-lg p-2 text-center">
                                     <p class="text-[9px] text-neutral-400 uppercase font-bold mb-0.5">Price</p>
-                                    <p class="text-xs font-mono font-bold text-neutral-600">{{ number_format($b['C4_price_level'] * 0.15, 4) }}</p>
+                                    <p class="text-xs font-mono font-bold text-neutral-600">{{ number_format($b['C4_price'] * 0.15, 4) }}</p>
                                 </div>
                             </div>
                         </div>
@@ -219,7 +220,8 @@
                 </div>
             </div>
             @endif
-
         </div>
+        
     </div>
+    
 </x-app-layout>

@@ -2,133 +2,190 @@
 
 namespace App\Services;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class GooglePlacesService
 {
-    private Client $client;
     private string $apiKey;
-    private string $baseUrl = 'https://maps.googleapis.com/maps/api/place/';
-
-    private float $userLat = -6.2233;
-    private float $userLng = 106.6491;
 
     public function __construct()
     {
         $this->apiKey = config('services.google_places.key', '');
-
-        $this->client = new Client([
-            'base_uri' => $this->baseUrl,
-            'timeout'  => 10.0,
-        ]);
     }
 
     public function getNearbyRestaurants(
         string $foodType,
         float $maxDistance,
         float $userLat = -6.2233,
-        float $userLng = 106.6491
+        float $userLng = 106.6491,
+        int $userBudget = 0 // New parameter to pass in the NLP budget!
     ): array {
         if (empty($this->apiKey)) {
-            Log::warning('GooglePlacesService: No API key, using dummy data.');
-            return $this->getDummyData($maxDistance, $userLat, $userLng);
-        }
-
-        try {
-            $general  = $this->fetchFromGoogle($maxDistance, '', $userLat, $userLng);
-            $targeted = [];
-
-            if ($foodType !== 'any') {
-                $targeted = $this->fetchFromGoogle($maxDistance, $foodType, $userLat, $userLng);
-            }
-
-            $all    = array_merge($general, $targeted);
-            $seen   = [];
-            $unique = [];
-
-            foreach ($all as $place) {
-                if (!in_array($place['google_place_id'], $seen)) {
-                    $seen[]   = $place['google_place_id'];
-                    $unique[] = $place;
-                }
-            }
-
-            return $unique;
-
-        } catch (GuzzleException $e) {
-            Log::error('GooglePlacesService Guzzle error: ' . $e->getMessage());
-            return $this->getDummyData($maxDistance, $userLat, $userLng);
-        }
-    }
-
-    private function fetchFromGoogle(
-        float $maxDistance,
-        string $keyword = '',
-        float $userLat = -6.2233,
-        float $userLng = 106.6491
-    ): array {
-        $params = [
-            'location' => "{$userLat},{$userLng}",
-            'radius'   => (int) $maxDistance,
-            'type'     => 'restaurant',
-            'key'      => $this->apiKey,
-        ];
-
-        if (!empty($keyword)) {
-            $params['keyword'] = $keyword;
-        }
-
-        $response = $this->client->get('nearbysearch/json', ['query' => $params]);
-        $data     = json_decode($response->getBody()->getContents(), true);
-
-        if (($data['status'] ?? '') !== 'OK') {
-            Log::error('GooglePlacesService API error: ' . ($data['status'] ?? 'unknown'));
+            Log::warning('No API Key found.');
             return [];
         }
 
-        return $this->mapResults($data['results'], $userLat, $userLng);
+        // Build a smart query
+        $query = 'Restaurant';
+        if ($foodType !== 'any') {
+            $query = $foodType . ' restaurant';
+        }
+
+        // The New API Call
+        $response = Http::withHeaders([
+            'X-Goog-Api-Key' => $this->apiKey,
+            // Notice places.types is added here so your old logic works!
+            'X-Goog-FieldMask' => 'places.id,places.displayName,places.priceLevel,places.priceRange,places.rating,places.userRatingCount,places.photos,places.types,places.location,places.formattedAddress,places.regularOpeningHours',
+        ])->post('https://places.googleapis.com/v1/places:searchText', [
+            'textQuery' => $query,
+            'locationBias' => [
+                'circle' => [
+                    'center' => ['latitude' => $userLat, 'longitude' => $userLng],
+                    'radius' => (float) $maxDistance
+                ]
+            ],
+            'maxResultCount' => 20, // Max you can get per single call in v1
+        ]);
+
+        if ($response->failed()) {
+            Log::error('Google Places API Error: ' . $response->body());
+            return [];
+        }
+
+        $places = $response->json('places') ?? [];
+
+        // 1. Map to your ideal object
+        $mapped = $this->mapResults($places, $userLat, $userLng);
+
+        // 2. Add safe UI Comments if they provided a budget
+        if ($userBudget > 0) {
+            $mapped = $this->addPriceComments($mapped, $userBudget);
+        }
+
+        return $mapped;
     }
 
-    private function mapResults(
-        array $results,
-        float $userLat = -6.2233,
-        float $userLng = 106.6491
-    ): array {
-        $mapped = [];
+    private function mapResults(array $places, float $userLat, float $userLng): array
+    {
+        $results = [];
+        foreach ($places as $place) {
+            $lat = $place['location']['latitude'];
+            $lng = $place['location']['longitude'];
+            $name = $place['displayName']['text'] ?? 'Unknown';
 
-        $nonFoodTypes = [
-            'furniture_store', 'home_goods_store', 'hardware_store',
-            'clothing_store', 'electronics_store'
-        ];
+            // Get high quality photo
+            $photoRef = $place['photos'][0]['name'] ?? null;
+            $photoUrl = $photoRef ? "https://places.googleapis.com/v1/{$photoRef}/media?maxWidthPx=400&key={$this->apiKey}" : null;
 
-        foreach ($results as $place) {
-            if (!empty(array_intersect($place['types'] ?? [], $nonFoodTypes))) {
-                continue;
+            // Pre-format the price display for your Blade view
+            $priceDisplay = 'Price N/A';
+            if (!empty($place['priceRange'])) {
+                $start = ($place['priceRange']['startPrice']['units'] ?? 0) / 1000;
+                $end = ($place['priceRange']['endPrice']['units'] ?? 0) / 1000;
+                $priceDisplay = "Rp {$start}k - {$end}k";
+            } elseif (!empty($place['priceLevel'])) {
+                $priceDisplay = str_repeat('$', $this->getExactPriceForSaw($place));
             }
 
-            $lat = $place['geometry']['location']['lat'];
-            $lng = $place['geometry']['location']['lng'];
-
-            $mapped[] = [
-                'name'            => $place['name'],
-                'google_place_id' => $place['place_id'],
+            $results[] = [
+                'name'            => $name,
+                'google_place_id' => $place['id'],
                 'lat'             => $lat,
                 'lng'             => $lng,
                 'distance'        => $this->calculateDistance($userLat, $userLng, $lat, $lng),
                 'rating'          => (float) ($place['rating'] ?? 3.0),
-                'review_count'    => (int)   ($place['user_ratings_total'] ?? 0),
-                'price_level'     => (int)   ($place['price_level'] ?? 2),
-                'types'           => $this->cleanTypes($place['types'] ?? [], $place['name']),
-                'food_match'      => 0,
-                'open_now'        => $place['opening_hours']['open_now'] ?? null,
-                'photo_ref'       => $place['photos'][0]['photo_reference'] ?? null,
-                'vicinity'        => $place['vicinity'] ?? '',
+                'review_count'    => (int) ($place['userRatingCount'] ?? 0),
+                
+                // SAFEGUARD FOR SAW: Translates Google's new format into your safe 1-4 integers
+                // 'price_level'     => $this->normalizePriceLevelToInteger($place), 
+
+                'exact_price'     => $this->getExactPriceForSaw($place),
+                
+                'price_range'     => $place['priceRange'] ?? null,
+                'price_display'   => $priceDisplay,
+                'types'           => $this->cleanTypes($place['types'] ?? [], $name),
+                'food_match'      => 0, // Assigned later in your controller
+                'open_now'      => $place['regularOpeningHours']['openNow'] ?? null,
+                'photo_url'       => $photoUrl,
+                'vicinity'        => $place['formattedAddress'] ?? '',
             ];
         }
+        return $results;
+    }
 
-        return $mapped;
+    // private function normalizePriceLevelToInteger(array $place): int
+    // {
+    //     if (!empty($place['priceLevel'])) {
+    //         $map = [
+    //             'PRICE_LEVEL_FREE'           => 1,
+    //             'PRICE_LEVEL_INEXPENSIVE'    => 1,
+    //             'PRICE_LEVEL_MODERATE'       => 2,
+    //             'PRICE_LEVEL_EXPENSIVE'      => 3,
+    //             'PRICE_LEVEL_VERY_EXPENSIVE' => 4,
+    //         ];
+    //         return $map[$place['priceLevel']] ?? 2;
+    //     }
+
+    //     // If enum missing, guess from crowd-sourced budget
+    //     if (!empty($place['priceRange']['startPrice']['units'])) {
+    //         $minPrice = (int) $place['priceRange']['startPrice']['units'];
+    //         if ($minPrice < 50000)  return 1;
+    //         if ($minPrice < 150000) return 2;
+    //         if ($minPrice < 300000) return 3;
+    //         return 4;
+    //     }
+    //     return 2;
+    // }
+
+    private function getExactPriceForSaw(array $place): float
+    {
+        // Scenario 1: We have the exact range. Use the Start Price!
+        if (!empty($place['priceRange']['startPrice']['units'])) {
+            return (float) $place['priceRange']['startPrice']['units'];
+        }
+
+        // Scenario 2: No exact range, but we have the 1-4 Price Level.
+        // We map it to a reasonable average price for Tangerang/Alam Sutera.
+        if (!empty($place['priceLevel'])) {
+            $level = $place['priceLevel'];
+            if ($level === 'PRICE_LEVEL_INEXPENSIVE') return 30000.0; // Assume ~30k
+            if ($level === 'PRICE_LEVEL_MODERATE')    return 75000.0; // Assume ~75k
+            if ($level === 'PRICE_LEVEL_EXPENSIVE')   return 150000.0; // Assume ~150k
+            if ($level === 'PRICE_LEVEL_VERY_EXPENSIVE') return 300000.0; // Assume ~300k
+        }
+
+        // Scenario 3: Complete ghost. No data at all.
+        // Assign the "safest" median price so the math doesn't crash (divide by zero).
+        return 50000.0; 
+    }
+
+    public function addPriceComments(array $candidates, int $userBudget): array
+    {
+        foreach ($candidates as &$r) {
+            $r['price_comment'] = null;
+            
+            if (!empty($r['price_range'])) {
+                $minPrice = (int) $r['price_range']['startPrice']['units'];
+                if ($minPrice <= $userBudget) {
+                    $r['price_comment'] = 'Affordable';
+                } elseif ($minPrice <= ($userBudget * 1.5)) {
+                    $r['price_comment'] = 'Slightly above budget';
+                } else {
+                    $r['price_comment'] = 'Very expensive';
+                }
+            }
+        }
+        return $candidates;
+    }
+
+    public function calculateDistance(float $lat1, float $lng1, float $lat2, float $lng2): float 
+    {
+        $earthRadius = 6371000;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a = sin($dLat/2) * sin($dLat/2) + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng/2) * sin($dLng/2);
+        return round($earthRadius * 2 * atan2(sqrt($a), sqrt(1 - $a)), 2);
     }
 
     private function cleanTypes(array $googleTypes, string $name = ''): array
@@ -333,18 +390,18 @@ class GooglePlacesService
              . "&key={$this->apiKey}";
     }
 
-    public function calculateDistance(
-        float $lat1, float $lng1,
-        float $lat2, float $lng2
-    ): float {
-        $earthRadius = 6371000;
-        $dLat = deg2rad($lat2 - $lat1);
-        $dLng = deg2rad($lng2 - $lng1);
-        $a = sin($dLat/2) * sin($dLat/2)
-           + cos(deg2rad($lat1)) * cos(deg2rad($lat2))
-           * sin($dLng/2) * sin($dLng/2);
-        return round($earthRadius * 2 * atan2(sqrt($a), sqrt(1 - $a)), 2);
-    }
+    // public function calculateDistance(
+    //     float $lat1, float $lng1,
+    //     float $lat2, float $lng2
+    // ): float {
+    //     $earthRadius = 6371000;
+    //     $dLat = deg2rad($lat2 - $lat1);
+    //     $dLng = deg2rad($lng2 - $lng1);
+    //     $a = sin($dLat/2) * sin($dLat/2)
+    //        + cos(deg2rad($lat1)) * cos(deg2rad($lat2))
+    //        * sin($dLng/2) * sin($dLng/2);
+    //     return round($earthRadius * 2 * atan2(sqrt($a), sqrt(1 - $a)), 2);
+    // }
 
     // dummy data for 
     private function getDummyData(

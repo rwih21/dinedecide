@@ -20,9 +20,6 @@
                 <span class="font-bold text-lg" style="color:#1A1A1A">DineDecide</span>
             </div>
             <div class="text-right">
-                {{-- <p class="font-bold uppercase tracking-widest" style="color:#059669; font-size:10px">
-                    📍 Alam Sutera
-                </p> --}}
                 <p class="font-bold uppercase tracking-widest mt-0.5" style="color:#525252; font-size:10px"
                    x-data="{ time: '' }"
                    x-init="const u=()=>{time=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})};u();setInterval(u,1000)"

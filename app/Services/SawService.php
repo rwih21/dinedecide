@@ -6,10 +6,10 @@ class SawService
 {
     // Criteria weights — must sum to 1.0
     private array $weights = [
-        'distance'    => 0.35, // C1 — Cost
-        'food_match'  => 0.30, // C2 — Benefit
-        'rating'      => 0.20, // C3 — Benefit
-        'price_level' => 0.15, // C4 — Cost
+        'distance'   => 0.35, // C1 — Cost
+        'food_match' => 0.30, // C2 — Benefit
+        'rating'     => 0.20, // C3 — Benefit
+        'price'      => 0.15, // C4 — Cost (Renamed from price_level)
     ];
     // Radius of indifference for C1 (meters)
     private float $indifferenceRadius = 1000.0;
@@ -17,8 +17,8 @@ class SawService
     /**
      * Main entry point.
      * $candidates = array of restaurants, each must have:
-     *   distance (float, meters), food_match (0|1),
-     *   rating (float, 0-5), price_level (int, 1-4)
+     * distance (float, meters), food_match (0|1),
+     * rating (float, 0-5), exact_price (float)
      *
      * Returns the same array with saw_score and criteria_breakdown added,
      * sorted descending by saw_score.
@@ -36,7 +36,7 @@ class SawService
             return [];
         }
         
-        $filtered = $this->applyBayesianRating($filtered); // apply Bayesian rating adjustment before normalize
+        $filtered = $this->applyBayesianRating($filtered);
 
         // Step 2 — Normalize each criterion
         $normalized = $this->normalize($filtered);
@@ -64,16 +64,6 @@ class SawService
         );
     }
 
-    /**
-     * Apply Bayesian average to smooth ratings based on review count.
-     * Prevents low-review restaurants from dominating on rating alone.
-     *
-     * Formula: (n × r + m × C) / (n + m)
-     *   n = review count
-     *   r = raw rating
-     *   m = confidence threshold (min reviews before we trust fully)
-     *   C = global mean rating across all candidates
-     */
     private function applyBayesianRating(array $candidates): array
     {
         $m = 200;
@@ -87,15 +77,16 @@ class SawService
 
         return $candidates;
     }
+
     private function normalize(array $candidates): array
     {
         $distances   = array_column($candidates, 'distance');
         $ratings     = array_column($candidates, 'adjusted_rating');
-        $priceLevels = array_column($candidates, 'price_level');
+        $prices      = array_column($candidates, 'exact_price'); // Grab the real IDR amounts!
 
-        $minDistance  = min($distances);
-        $maxRating    = max($ratings);
-        $minPrice     = min($priceLevels);
+        $minDistance = min($distances);
+        $maxRating   = max($ratings);
+        $minPrice    = min($prices);
 
         foreach ($candidates as &$r) {
             // C1: Distance — Cost
@@ -113,9 +104,9 @@ class SawService
                 ? $r['adjusted_rating'] / $maxRating
                 : 0.0;
 
-            // C4: Price level — Cost
-            $r['r_price_level'] = $r['price_level'] > 0
-                ? $minPrice / $r['price_level']
+            // C4: Price — Cost (Using exact IDR!)
+            $r['r_price'] = $r['exact_price'] > 0
+                ? $minPrice / $r['exact_price']
                 : 0.0;
         }
 
@@ -126,10 +117,10 @@ class SawService
     {
         foreach ($candidates as &$r) {
             $vi =
-                ($this->weights['distance']    * $r['r_distance'])    +
-                ($this->weights['food_match']  * $r['r_food_match'])  +
-                ($this->weights['rating']      * $r['r_rating'])      +
-                ($this->weights['price_level'] * $r['r_price_level']);
+                ($this->weights['distance']   * $r['r_distance'])    +
+                ($this->weights['food_match'] * $r['r_food_match'])  +
+                ($this->weights['rating']     * $r['r_rating'])      +
+                ($this->weights['price']      * $r['r_price']); // Use the new normalized key
 
             $r['saw_score'] = round($vi, 6);
 
@@ -137,7 +128,8 @@ class SawService
                 'C1_distance'     => round($r['r_distance'],    4),
                 'C2_food_match'   => round($r['r_food_match'],  4),
                 'C3_rating'       => round($r['r_rating'],      4),
-                'C4_price_level'  => round($r['r_price_level'], 4),
+                'C4_price'        => round($r['r_price'],       4), // Updated name for Blade view
+                'exact_price'     => $r['exact_price'],         // Log the exact price used for transparency
                 'raw_rating'      => $r['rating'],
                 'adjusted_rating' => $r['adjusted_rating'],
                 'review_count'    => $r['review_count'] ?? 0,

@@ -68,13 +68,28 @@ class RestaurantController extends Controller
                 'VisitTime'   => 'now',
             ];
         }
+        // Convert the user's intent into an exact IDR budget for the new math
+        $userBudget = 0;
+        if ($request->input('mode') === 'nlp') {
+            // Assuming your NLP extracts an exact number (like 50000). 
+            // If it still extracts 1-4, use the mapping below instead.
+            $userBudget = $intent['MaxPrice'] ?? 0; 
+        } else {
+            // Map the frontend 1-4 buttons to an IDR budget
+            $budgetMap = [1 => 30000, 2 => 75000, 3 => 150000, 4 => 300000];
+            $userBudget = $budgetMap[$intent['MaxPrice']] ?? 300000;
+        }
+        
+        // Save it to the intent so we can use it below
+        $intent['MaxBudget'] = $userBudget;
 
         // --- Fetch candidates with dynamic location ---
         $candidates = $this->places->getNearbyRestaurants(
             $intent['FoodType'],
             $intent['MaxDistance'],
             $userLat,
-            $userLng
+            $userLng,
+            $intent['MaxBudget']
         );
 
         $candidates = $this->places->applyFoodMatch($candidates, $intent['FoodType']);
@@ -82,19 +97,29 @@ class RestaurantController extends Controller
 
         $candidates = array_values(array_filter(
             $candidates,
-            fn($r) => $r['price_level'] <= $intent['MaxPrice']
+            fn($r) => $intent['MaxBudget'] === 0 || $r['exact_price'] <= ($intent['MaxBudget'] * 1.5)
         ));
 
         $ranked = $this->saw->rank($candidates);
 
         // --- Fallback ---
         if (empty($ranked)) {
-            $allCandidates = $this->places->getNearbyRestaurants('any', $intent['MaxDistance'], $userLat, $userLng);
+            // 1. Add $intent['MaxBudget'] as the 5th parameter here!
+            $allCandidates = $this->places->getNearbyRestaurants(
+                'any', 
+                $intent['MaxDistance'], 
+                $userLat, 
+                $userLng, 
+                $intent['MaxBudget']
+            );
+            
             $allCandidates = $this->places->applyFoodMatch($allCandidates, 'any');
             $allCandidates = $this->places->applyTimeWarning($allCandidates, $intent['VisitTime']);
+            
+            // 2. Update the filter to use the exact_price math (1.5x relaxation)
             $allCandidates = array_values(array_filter(
                 $allCandidates,
-                fn($r) => $r['price_level'] <= $intent['MaxPrice']
+                fn($r) => $intent['MaxBudget'] === 0 || $r['exact_price'] <= ($intent['MaxBudget'] * 1.5)
             ));
 
             $ranked  = $this->saw->rank($allCandidates);

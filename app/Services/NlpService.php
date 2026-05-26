@@ -62,46 +62,32 @@ class NlpService
 
         "FoodType": The TYPE OF FOOD OR CUISINE only. Must be one of:
             ramen, sushi, japanese, indonesian, burger, pizza, chicken, coffee, any
-            - "family dinner" is NOT a food type return "any"
-            - "date night" is NOT a food type return "any"
-            - "tonkotsu" "ramen", "nasi goreng" "indonesian", "ayam" "chicken"
-            - If no specific food is mentioned return "any"
+            - "family dinner" / "date night" is NOT a food type return "any"
 
-        "MaxPrice": Google price level 1-4:
-            under 30k / cheap / budget    = 1
-            under 50k / affordable        = 2
-            under 100k / moderate         = 3
-            expensive / fine dining       = 4
-            not mentioned                 = 4
+        "MaxPrice": Exact integer in IDR based on the user's maximum budget.
+            - "under 50k" or "50rb" = 50000
+            - "25k to 60k" = 60000 (extract the MAXIMUM they are willing to spend)
+            - "cheap" / "budget" = 30000
+            - "expensive" / "fine dining" = 300000
+            - not mentioned = 0
 
         "MaxDistance": in meters:
             nearby / dekat / near         = 1000
             walking distance              = 500
-            a number in km                = that number × 1000
+            a number in km                = that number * 1000
             not mentioned                 = 3000
 
         "Occasion": The SOCIAL CONTEXT or PURPOSE of the meal. Must be one of:
             family, romantic, formal, casual, any
-            - "family dinner" / "with kids" / "keluarga"         = family
-            - "date night" / "romantic" / "berdua"               = romantic
-            - "business lunch" / "meeting" / "formal"            = formal
-            - "quick bite" / "hangout" / "santai" / "nongkrong"  = casual
-            - not mentioned / unclear                            = any
 
         "VisitTime": WHEN they plan to visit. Must be one of:
             now, morning, lunch, afternoon, evening, night
-            - breakfast / pagi                     = morning
-            - lunch / siang / makan siang          = lunch
-            - afternoon / sore                     = afternoon
-            - dinner / evening / malam / tonight   = evening
-            - late night / larut malam             = night
-            - "later" / "soon" / not mentioned     = now
 
-        Example input: "I will be having a family dinner later this evening"
-        Example output: {"FoodType": "any", "MaxPrice": 4, "MaxDistance": 3000, "Occasion": "family", "VisitTime": "evening"}
+        Example input: "I want chicken and I am on a budget. Around 25k to 50k is ok"
+        Example output: {"FoodType": "chicken", "MaxPrice": 50000, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
 
         Return exactly this shape:
-        {"FoodType": "any", "MaxPrice": 4, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
+        {"FoodType": "any", "MaxPrice": 0, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
         PROMPT;
     }
 
@@ -118,7 +104,6 @@ class NlpService
             return $this->fallbackIntent();
         }
 
-        // Allowed value lists — sanitize anything outside these
         $validFoodTypes = ['ramen','sushi','japanese','indonesian','burger','pizza','chicken','coffee','any'];
         $validOccasions = ['family','romantic','formal','casual','any'];
         $validTimes     = ['now','morning','lunch','afternoon','evening','night'];
@@ -127,14 +112,13 @@ class NlpService
         $occasion = strtolower(trim($data['Occasion']  ?? 'any'));
         $visitTime = strtolower(trim($data['VisitTime'] ?? 'now'));
 
-        // If model returned an invalid value, fall back to safe default
         if (!in_array($foodType, $validFoodTypes)) $foodType = 'any';
         if (!in_array($occasion, $validOccasions)) $occasion = 'any';
         if (!in_array($visitTime, $validTimes))    $visitTime = 'now';
 
         return [
             'FoodType'    => $foodType,
-            'MaxPrice'    => (int)   ($data['MaxPrice']    ?? 4),
+            'MaxPrice'    => (int)   ($data['MaxPrice']    ?? 0), // Default to 0 (No limit)
             'MaxDistance' => (float) ($data['MaxDistance'] ?? 3000),
             'Occasion'    => $occasion,
             'VisitTime'   => $visitTime,
