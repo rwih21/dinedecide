@@ -19,23 +19,20 @@ class GooglePlacesService
         float $maxDistance,
         float $userLat = -6.2233,
         float $userLng = 106.6491,
-        int $userBudget = 0 // New parameter to pass in the NLP budget!
+        int $userBudget = 0
     ): array {
         if (empty($this->apiKey)) {
             Log::warning('No API Key found.');
             return [];
         }
 
-        // Build a smart query
         $query = 'Restaurant';
         if ($foodType !== 'any') {
             $query = $foodType . ' restaurant';
         }
 
-        // The New API Call
         $response = Http::withHeaders([
             'X-Goog-Api-Key' => $this->apiKey,
-            // Notice places.types is added here so your old logic works!
             'X-Goog-FieldMask' => 'places.id,places.displayName,places.priceLevel,places.priceRange,places.rating,places.userRatingCount,places.photos,places.types,places.location,places.formattedAddress,places.regularOpeningHours',
         ])->post('https://places.googleapis.com/v1/places:searchText', [
             'textQuery' => $query,
@@ -45,7 +42,7 @@ class GooglePlacesService
                     'radius' => (float) $maxDistance
                 ]
             ],
-            'maxResultCount' => 20, // Max you can get per single call in v1
+            'maxResultCount' => 20,
         ]);
 
         if ($response->failed()) {
@@ -54,11 +51,8 @@ class GooglePlacesService
         }
 
         $places = $response->json('places') ?? [];
-
-        // 1. Map to your ideal object
         $mapped = $this->mapResults($places, $userLat, $userLng);
 
-        // 2. Add safe UI Comments if they provided a budget
         if ($userBudget > 0) {
             $mapped = $this->addPriceComments($mapped, $userBudget);
         }
@@ -70,22 +64,33 @@ class GooglePlacesService
     {
         $results = [];
         foreach ($places as $place) {
-            $lat = $place['location']['latitude'];
-            $lng = $place['location']['longitude'];
+            $lat  = $place['location']['latitude'];
+            $lng  = $place['location']['longitude'];
             $name = $place['displayName']['text'] ?? 'Unknown';
 
-            // Get high quality photo
             $photoRef = $place['photos'][0]['name'] ?? null;
-            $photoUrl = $photoRef ? "https://places.googleapis.com/v1/{$photoRef}/media?maxWidthPx=400&key={$this->apiKey}" : null;
+            $photoUrl = $photoRef
+                ? "https://places.googleapis.com/v1/{$photoRef}/media?maxWidthPx=400&key={$this->apiKey}"
+                : null;
 
-            // Pre-format the price display for your Blade view
+            // --- FIX: build priceDisplay correctly ---
+            // priceRange takes priority (exact IDR range from Google)
+            // priceLevel fallback maps the enum to $/$$/$$$/$$$$
+            // Never pass the float from getExactPriceForSaw() into str_repeat()
             $priceDisplay = 'Price N/A';
             if (!empty($place['priceRange'])) {
-                $start = ($place['priceRange']['startPrice']['units'] ?? 0) / 1000;
-                $end = ($place['priceRange']['endPrice']['units'] ?? 0) / 1000;
+                $start        = ($place['priceRange']['startPrice']['units'] ?? 0) / 1000;
+                $end          = ($place['priceRange']['endPrice']['units']   ?? 0) / 1000;
                 $priceDisplay = "Rp {$start}k - {$end}k";
             } elseif (!empty($place['priceLevel'])) {
-                $priceDisplay = str_repeat('$', $this->getExactPriceForSaw($place));
+                $map = [
+                    'PRICE_LEVEL_FREE'           => '$',
+                    'PRICE_LEVEL_INEXPENSIVE'    => '$',
+                    'PRICE_LEVEL_MODERATE'       => '$$',
+                    'PRICE_LEVEL_EXPENSIVE'      => '$$$',
+                    'PRICE_LEVEL_VERY_EXPENSIVE' => '$$$$',
+                ];
+                $priceDisplay = $map[$place['priceLevel']] ?? '$$';
             }
 
             $results[] = [
@@ -95,18 +100,13 @@ class GooglePlacesService
                 'lng'             => $lng,
                 'distance'        => $this->calculateDistance($userLat, $userLng, $lat, $lng),
                 'rating'          => (float) ($place['rating'] ?? 3.0),
-                'review_count'    => (int) ($place['userRatingCount'] ?? 0),
-                
-                // SAFEGUARD FOR SAW: Translates Google's new format into your safe 1-4 integers
-                // 'price_level'     => $this->normalizePriceLevelToInteger($place), 
-
+                'review_count'    => (int)   ($place['userRatingCount'] ?? 0),
                 'exact_price'     => $this->getExactPriceForSaw($place),
-                
                 'price_range'     => $place['priceRange'] ?? null,
                 'price_display'   => $priceDisplay,
                 'types'           => $this->cleanTypes($place['types'] ?? [], $name),
-                'food_match'      => 0, // Assigned later in your controller
-                'open_now'      => $place['regularOpeningHours']['openNow'] ?? null,
+                'food_match'      => 0,
+                'open_now'        => $place['regularOpeningHours']['openNow'] ?? null,
                 'photo_url'       => $photoUrl,
                 'vicinity'        => $place['formattedAddress'] ?? '',
             ];
@@ -114,57 +114,28 @@ class GooglePlacesService
         return $results;
     }
 
-    // private function normalizePriceLevelToInteger(array $place): int
-    // {
-    //     if (!empty($place['priceLevel'])) {
-    //         $map = [
-    //             'PRICE_LEVEL_FREE'           => 1,
-    //             'PRICE_LEVEL_INEXPENSIVE'    => 1,
-    //             'PRICE_LEVEL_MODERATE'       => 2,
-    //             'PRICE_LEVEL_EXPENSIVE'      => 3,
-    //             'PRICE_LEVEL_VERY_EXPENSIVE' => 4,
-    //         ];
-    //         return $map[$place['priceLevel']] ?? 2;
-    //     }
-
-    //     // If enum missing, guess from crowd-sourced budget
-    //     if (!empty($place['priceRange']['startPrice']['units'])) {
-    //         $minPrice = (int) $place['priceRange']['startPrice']['units'];
-    //         if ($minPrice < 50000)  return 1;
-    //         if ($minPrice < 150000) return 2;
-    //         if ($minPrice < 300000) return 3;
-    //         return 4;
-    //     }
-    //     return 2;
-    // }
-
     private function getExactPriceForSaw(array $place): float
     {
-        // Scenario 1: We have the exact range. Use the Start Price!
         if (!empty($place['priceRange']['startPrice']['units'])) {
             return (float) $place['priceRange']['startPrice']['units'];
         }
 
-        // Scenario 2: No exact range, but we have the 1-4 Price Level.
-        // We map it to a reasonable average price for Tangerang/Alam Sutera.
         if (!empty($place['priceLevel'])) {
             $level = $place['priceLevel'];
-            if ($level === 'PRICE_LEVEL_INEXPENSIVE') return 30000.0; // Assume ~30k
-            if ($level === 'PRICE_LEVEL_MODERATE')    return 75000.0; // Assume ~75k
-            if ($level === 'PRICE_LEVEL_EXPENSIVE')   return 150000.0; // Assume ~150k
-            if ($level === 'PRICE_LEVEL_VERY_EXPENSIVE') return 300000.0; // Assume ~300k
+            if ($level === 'PRICE_LEVEL_INEXPENSIVE')    return 30000.0;
+            if ($level === 'PRICE_LEVEL_MODERATE')       return 75000.0;
+            if ($level === 'PRICE_LEVEL_EXPENSIVE')      return 150000.0;
+            if ($level === 'PRICE_LEVEL_VERY_EXPENSIVE') return 300000.0;
         }
 
-        // Scenario 3: Complete ghost. No data at all.
-        // Assign the "safest" median price so the math doesn't crash (divide by zero).
-        return 50000.0; 
+        return 50000.0;
     }
 
     public function addPriceComments(array $candidates, int $userBudget): array
     {
         foreach ($candidates as &$r) {
             $r['price_comment'] = null;
-            
+
             if (!empty($r['price_range'])) {
                 $minPrice = (int) $r['price_range']['startPrice']['units'];
                 if ($minPrice <= $userBudget) {
@@ -179,12 +150,14 @@ class GooglePlacesService
         return $candidates;
     }
 
-    public function calculateDistance(float $lat1, float $lng1, float $lat2, float $lng2): float 
+    public function calculateDistance(float $lat1, float $lng1, float $lat2, float $lng2): float
     {
         $earthRadius = 6371000;
         $dLat = deg2rad($lat2 - $lat1);
         $dLng = deg2rad($lng2 - $lng1);
-        $a = sin($dLat/2) * sin($dLat/2) + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng/2) * sin($dLng/2);
+        $a    = sin($dLat/2) * sin($dLat/2)
+              + cos(deg2rad($lat1)) * cos(deg2rad($lat2))
+              * sin($dLng/2) * sin($dLng/2);
         return round($earthRadius * 2 * atan2(sqrt($a), sqrt(1 - $a)), 2);
     }
 
@@ -214,7 +187,6 @@ class GooglePlacesService
             $cleaned[] = $map[$type] ?? str_replace('_restaurant', '', $type);
         }
 
-        // If Google gave us nothing useful, infer from restaurant name
         if (empty($cleaned) && !empty($name)) {
             $cleaned = $this->inferTypesFromName($name);
         }
@@ -227,66 +199,51 @@ class GooglePlacesService
         $name = strtolower($name);
 
         $keywords = [
-            // Ramen
-            'ramen'      => 'ramen',
-            'mie'        => 'ramen',
-            'noodle'     => 'ramen',
-            'pho'        => 'ramen',
-
-            // Sushi / Japanese
-            'sushi'      => 'sushi',
-            'sashimi'    => 'sushi',
-            'japanese'   => 'japanese',
-            'jepang'     => 'japanese',
-            'yoshinoya'  => 'japanese',
-            'hokben'     => 'japanese',
-            'pepper lunch' => 'japanese',
-            'shaburi'    => 'japanese',
-            'yakiniku'   => 'japanese',
-            'ichiban'    => 'japanese',
-
-            // Indonesian
-            'bakso'      => 'indonesian',
-            'nasi'       => 'indonesian',
-            'soto'       => 'indonesian',
-            'padang'     => 'indonesian',
-            'warteg'     => 'indonesian',
-            'warung'     => 'indonesian',
-            'masakan'    => 'indonesian',
-            'indonesia'  => 'indonesian',
-            'taman santap' => 'indonesian',
+            'ramen'         => 'ramen',
+            'mie'           => 'ramen',
+            'noodle'        => 'ramen',
+            'pho'           => 'ramen',
+            'sushi'         => 'sushi',
+            'sashimi'       => 'sushi',
+            'japanese'      => 'japanese',
+            'jepang'        => 'japanese',
+            'yoshinoya'     => 'japanese',
+            'hokben'        => 'japanese',
+            'pepper lunch'  => 'japanese',
+            'shaburi'       => 'japanese',
+            'yakiniku'      => 'japanese',
+            'ichiban'       => 'japanese',
+            'bakso'         => 'indonesian',
+            'nasi'          => 'indonesian',
+            'soto'          => 'indonesian',
+            'padang'        => 'indonesian',
+            'warteg'        => 'indonesian',
+            'warung'        => 'indonesian',
+            'masakan'       => 'indonesian',
+            'indonesia'     => 'indonesian',
+            'taman santap'  => 'indonesian',
             'bandar djakarta' => 'indonesian',
-            'omakyo'     => 'indonesian',
-
-            // Burger
-            'burger'     => 'burger',
-            'mcdonald'   => 'burger',
-            'mcdonalds'  => 'burger',
-            'wendy'      => 'burger',
-            'smashburger'=> 'burger',
-
-            // Pizza
-            'pizza'      => 'pizza',
-
-            // Chicken
-            'chicken'    => 'chicken',
-            'rooster'    => 'chicken',
-            'ayam'       => 'chicken',
-            'kfc'        => 'chicken',
-            'nene'       => 'chicken',
-            'chick'      => 'chicken',
-
-            // Coffee
-            'coffee'     => 'coffee',
-            'kopi'       => 'coffee',
-            'cafe'       => 'coffee',
-            'starbucks'  => 'coffee',
-            'espresso'   => 'coffee',
-            'brew'       => 'coffee',
-
-            // Fastfood
-            'fastfood'   => 'fastfood',
-            'fast food'  => 'fastfood',
+            'omakyo'        => 'indonesian',
+            'burger'        => 'burger',
+            'mcdonald'      => 'burger',
+            'mcdonalds'     => 'burger',
+            'wendy'         => 'burger',
+            'smashburger'   => 'burger',
+            'pizza'         => 'pizza',
+            'chicken'       => 'chicken',
+            'rooster'       => 'chicken',
+            'ayam'          => 'chicken',
+            'kfc'           => 'chicken',
+            'nene'          => 'chicken',
+            'chick'         => 'chicken',
+            'coffee'        => 'coffee',
+            'kopi'          => 'coffee',
+            'cafe'          => 'coffee',
+            'starbucks'     => 'coffee',
+            'espresso'      => 'coffee',
+            'brew'          => 'coffee',
+            'fastfood'      => 'fastfood',
+            'fast food'     => 'fastfood',
         ];
 
         $inferred = [];
@@ -296,8 +253,6 @@ class GooglePlacesService
             }
         }
 
-        // Default to indonesian if nothing matched — most restaurants
-        // around Alam Sutera that have no specific keyword are local Indonesian
         return empty($inferred) ? ['indonesian'] : array_unique($inferred);
     }
 
@@ -320,13 +275,8 @@ class GooglePlacesService
         }, $candidates);
     }
 
-    /**
- * Apply time warning flag to candidates.
- * Uses open_now for current time, or infers from visit time period.
- */
     public function applyTimeWarning(array $candidates, string $visitTime): array
     {
-        // Time period to hour mapping (start hour of period)
         $periodHours = [
             'morning'   => 9,
             'lunch'     => 12,
@@ -338,39 +288,28 @@ class GooglePlacesService
         return array_map(function ($r) use ($visitTime, $periodHours) {
 
             if ($visitTime === 'now') {
-                // Use Google's open_now directly
-                $r['time_warning'] = ($r['open_now'] === false)
-                    ? 'Currently closed'
-                    : null;
+                $r['time_warning'] = ($r['open_now'] === false) ? 'Currently closed' : null;
                 return $r;
             }
 
             $targetHour = $periodHours[$visitTime] ?? (int) date('H');
-
-            // Soft heuristic: fast food usually open all day,
-            // fine dining usually closed before 11am and after 10pm,
-            // cafes usually closed after 9pm
-            $types = $r['types'] ?? [];
-            $price = $r['price_level'] ?? 2;
-            $warning = null;
+            $types      = $r['types'] ?? [];
+            $price      = $r['price_level'] ?? 2;
+            $warning    = null;
 
             if (in_array('fastfood', $types)) {
-                // Fast food: open 07-23, likely fine anytime
                 if ($targetHour < 7 || $targetHour > 23) {
                     $warning = 'May be closed at this hour';
                 }
             } elseif ($price >= 3) {
-                // Fine dining: typically 11-22
                 if ($targetHour < 11 || $targetHour > 22) {
                     $warning = 'Fine dining may not be open at this hour';
                 }
             } elseif (in_array('coffee', $types)) {
-                // Cafes: typically close around 21
                 if ($targetHour > 21) {
                     $warning = 'Cafe may be closed at this hour';
                 }
             } else {
-                // General restaurants: 10-22
                 if ($targetHour < 10 || $targetHour > 22) {
                     $warning = 'May be closed at this hour';
                 }
@@ -388,63 +327,5 @@ class GooglePlacesService
              . "?maxwidth={$maxWidth}"
              . "&photo_reference={$photoRef}"
              . "&key={$this->apiKey}";
-    }
-
-    // public function calculateDistance(
-    //     float $lat1, float $lng1,
-    //     float $lat2, float $lng2
-    // ): float {
-    //     $earthRadius = 6371000;
-    //     $dLat = deg2rad($lat2 - $lat1);
-    //     $dLng = deg2rad($lng2 - $lng1);
-    //     $a = sin($dLat/2) * sin($dLat/2)
-    //        + cos(deg2rad($lat1)) * cos(deg2rad($lat2))
-    //        * sin($dLng/2) * sin($dLng/2);
-    //     return round($earthRadius * 2 * atan2(sqrt($a), sqrt(1 - $a)), 2);
-    // }
-
-    // dummy data for 
-    private function getDummyData(
-        float $maxDistance,
-        float $userLat = -6.2233,
-        float $userLng = 106.6491
-    ): array {
-        $places = [
-            ['name' => 'Ikkudo Ichi Ramen',      'lat' => -6.2248, 'lng' => 106.6510, 'rating' => 4.5, 'price_level' => 2, 'types' => ['ramen', 'japanese']],
-            ['name' => 'Ramen Bajuri',            'lat' => -6.2260, 'lng' => 106.6478, 'rating' => 4.2, 'price_level' => 1, 'types' => ['ramen', 'indonesian']],
-            ['name' => 'Yoshinoya',               'lat' => -6.2241, 'lng' => 106.6502, 'rating' => 3.8, 'price_level' => 1, 'types' => ['japanese', 'fastfood']],
-            ['name' => 'Nasi Goreng Kambing',     'lat' => -6.2290, 'lng' => 106.6520, 'rating' => 4.6, 'price_level' => 2, 'types' => ['indonesian']],
-            ['name' => 'Pizza Hut',               'lat' => -6.2310, 'lng' => 106.6540, 'rating' => 3.9, 'price_level' => 2, 'types' => ['pizza']],
-            ['name' => 'Sushi Tei',               'lat' => -6.2255, 'lng' => 106.6495, 'rating' => 4.3, 'price_level' => 3, 'types' => ['sushi', 'japanese']],
-            ['name' => 'Bakso Malang',            'lat' => -6.2200, 'lng' => 106.6460, 'rating' => 4.4, 'price_level' => 1, 'types' => ['indonesian']],
-            ['name' => 'McDonald\'s Alam Sutera', 'lat' => -6.2235, 'lng' => 106.6505, 'rating' => 4.0, 'price_level' => 1, 'types' => ['burger', 'fastfood']],
-            ['name' => 'Solaria',                 'lat' => -6.2270, 'lng' => 106.6488, 'rating' => 3.7, 'price_level' => 2, 'types' => ['indonesian']],
-            ['name' => 'Pepper Lunch',            'lat' => -6.2245, 'lng' => 106.6498, 'rating' => 4.1, 'price_level' => 2, 'types' => ['japanese']],
-            ['name' => 'Hokben',                  'lat' => -6.2238, 'lng' => 106.6492, 'rating' => 4.0, 'price_level' => 1, 'types' => ['japanese', 'fastfood']],
-            ['name' => 'Warung Padang Sederhana', 'lat' => -6.2215, 'lng' => 106.6472, 'rating' => 4.5, 'price_level' => 1, 'types' => ['indonesian']],
-            ['name' => 'Starbucks Alam Sutera',   'lat' => -6.2242, 'lng' => 106.6507, 'rating' => 4.3, 'price_level' => 3, 'types' => ['coffee']],
-            ['name' => 'Burger King',             'lat' => -6.2265, 'lng' => 106.6515, 'rating' => 4.0, 'price_level' => 2, 'types' => ['burger', 'fastfood']],
-            ['name' => 'Mie Ramen 88',            'lat' => -6.2225, 'lng' => 106.6480, 'rating' => 4.3, 'price_level' => 1, 'types' => ['ramen']],
-            ['name' => 'KFC Alam Sutera',         'lat' => -6.2237, 'lng' => 106.6493, 'rating' => 3.9, 'price_level' => 1, 'types' => ['chicken', 'fastfood']],
-            ['name' => 'Shaburi Shabu-shabu',     'lat' => -6.2300, 'lng' => 106.6535, 'rating' => 4.4, 'price_level' => 3, 'types' => ['japanese']],
-            ['name' => 'Nene Chicken',            'lat' => -6.2243, 'lng' => 106.6496, 'rating' => 4.2, 'price_level' => 2, 'types' => ['chicken']],
-            ['name' => 'Ichiban Sushi',           'lat' => -6.2280, 'lng' => 106.6530, 'rating' => 4.1, 'price_level' => 2, 'types' => ['sushi', 'japanese']],
-            ['name' => 'Chatime',                 'lat' => -6.2252, 'lng' => 106.6501, 'rating' => 4.2, 'price_level' => 1, 'types' => ['coffee']],
-        ];
-
-        foreach ($places as &$place) {
-            $place['distance']        = $this->calculateDistance($userLat, $userLng, $place['lat'], $place['lng']);
-            $place['google_place_id'] = 'dummy_' . str_replace(' ', '_', strtolower($place['name']));
-            $place['food_match']      = 0;
-            $place['open_now']        = true;
-            $place['photo_ref']       = null;
-            $place['review_count']    = 50;
-            $place['vicinity']        = 'Alam Sutera, Tangerang';
-        }
-
-        return array_values(array_filter(
-            $places,
-            fn($p) => $p['distance'] <= $maxDistance
-        ));
     }
 }

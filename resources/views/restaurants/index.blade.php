@@ -174,6 +174,16 @@
                             <p class="text-xs mt-1" style="color:#EF4444">{{ $message }}</p>
                         @enderror
 
+                        {{-- Browse nearby link --}}
+                        <p class="mt-6 text-center text-xs" style="color:#A3A3A3">
+                            Not sure what you want?
+                            <a href="{{ route('restaurants.browse') }}"
+                            class="font-semibold underline underline-offset-2 transition-colors hover:opacity-70"
+                            style="color:#059669">
+                                Browse all nearby places →
+                            </a>
+                        </p>
+
                         {{-- Quick tags --}}
                         {{-- <div class="flex flex-wrap gap-2 mt-3">
                             @foreach(['Quick lunch', 'Date night', 'Budget meal', 'Ramen nearby'] as $tag)

@@ -9,6 +9,7 @@ use App\Services\NlpService;
 use App\Services\SawService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Services\PromotionService;
 
 class RestaurantController extends Controller
 {
@@ -16,6 +17,7 @@ class RestaurantController extends Controller
         private NlpService           $nlp,
         private GooglePlacesService  $places,
         private SawService           $saw,
+        private PromotionService     $promotions
     ) {}
 
     // Show the main search page
@@ -24,10 +26,46 @@ class RestaurantController extends Controller
         return view('restaurants.index');
     }
 
+    // Browse all nearby places (with session cache)
+    public function browse(Request $request)
+    {
+        $fromCache     = false;
+        $cacheKey      = 'nearby_places';
+        $cachedAt      = session('nearby_cached_at');
+        $maxAgeSeconds = 600; // 10 minutes
+
+        $places = null;
+
+        // Use cached data if it exists and is fresh enough
+        if ($cachedAt && now()->diffInSeconds($cachedAt) < $maxAgeSeconds) {
+            $places    = session($cacheKey);
+            $fromCache = true;
+        }
+
+        // Fetch fresh if cache is missing or stale
+        if (empty($places)) {
+            // Use the user's last known location from session, or fall back to default
+            $userLat = session('last_lat', -6.2233);
+            $userLng = session('last_lng', 106.6491);
+
+            $places = $this->places->getNearbyRestaurants('any', 3000, $userLat, $userLng, 0);
+            $places = $this->places->applyFoodMatch($places, 'any');
+            $places = $this->places->applyTimeWarning($places, 'now');
+
+            // Sort by distance for browse view (natural order, not SAW ranked)
+            usort($places, fn($a, $b) => $a['distance'] <=> $b['distance']);
+
+            // Save to session cache
+            session([
+                $cacheKey          => $places,
+                'nearby_cached_at' => now(),
+            ]);
+        }
+
+        return view('restaurants.browse', compact('places', 'fromCache'));
+    }
+
     // Handle the search request
-
-    
-
     public function search(Request $request)
     {
         $request->validate([
@@ -50,6 +88,9 @@ class RestaurantController extends Controller
         $rawQuery = '';
         $relaxed  = false;
 
+        // Save user location to session so browse can reuse it
+        session(['last_lat' => $userLat, 'last_lng' => $userLng]);
+
         // --- Build intent ---
         if ($request->input('mode') === 'nlp') {
             $rawQuery = $request->input('query');
@@ -68,20 +109,21 @@ class RestaurantController extends Controller
                 'VisitTime'   => 'now',
             ];
         }
+
         // Convert the user's intent into an exact IDR budget for the new math
         $userBudget = 0;
         if ($request->input('mode') === 'nlp') {
-            // Assuming your NLP extracts an exact number (like 50000). 
-            // If it still extracts 1-4, use the mapping below instead.
-            $userBudget = $intent['MaxPrice'] ?? 0; 
+            $userBudget = $intent['MaxPrice'] ?? 0;
         } else {
-            // Map the frontend 1-4 buttons to an IDR budget
-            $budgetMap = [1 => 30000, 2 => 75000, 3 => 150000, 4 => 300000];
+            $budgetMap  = [1 => 30000, 2 => 75000, 3 => 150000, 4 => 300000];
             $userBudget = $budgetMap[$intent['MaxPrice']] ?? 300000;
         }
-        
+
         // Save it to the intent so we can use it below
         $intent['MaxBudget'] = $userBudget;
+
+        // Fetch Promoted Place
+        $promotedPlace = $this->promotions->pick($intent);
 
         // --- Fetch candidates with dynamic location ---
         $candidates = $this->places->getNearbyRestaurants(
@@ -104,19 +146,17 @@ class RestaurantController extends Controller
 
         // --- Fallback ---
         if (empty($ranked)) {
-            // 1. Add $intent['MaxBudget'] as the 5th parameter here!
             $allCandidates = $this->places->getNearbyRestaurants(
-                'any', 
-                $intent['MaxDistance'], 
-                $userLat, 
-                $userLng, 
+                'any',
+                $intent['MaxDistance'],
+                $userLat,
+                $userLng,
                 $intent['MaxBudget']
             );
-            
+
             $allCandidates = $this->places->applyFoodMatch($allCandidates, 'any');
             $allCandidates = $this->places->applyTimeWarning($allCandidates, $intent['VisitTime']);
-            
-            // 2. Update the filter to use the exact_price math (1.5x relaxation)
+
             $allCandidates = array_values(array_filter(
                 $allCandidates,
                 fn($r) => $intent['MaxBudget'] === 0 || $r['exact_price'] <= ($intent['MaxBudget'] * 1.5)
@@ -128,6 +168,22 @@ class RestaurantController extends Controller
 
         if (empty($ranked)) {
             return back()->with('error', 'No restaurants found in this area. Try increasing your distance.');
+        }
+
+        // --- Warm the browse cache as a side effect ---
+        // Only if the cache is missing or stale — avoids an extra API call
+        // when the cache is already fresh
+        if (!session('nearby_cached_at') ||
+            now()->diffInSeconds(session('nearby_cached_at')) >= 600
+        ) {
+            $allNearby = $this->places->getNearbyRestaurants('any', 3000, $userLat, $userLng, 0);
+            $allNearby = $this->places->applyFoodMatch($allNearby, 'any');
+            $allNearby = $this->places->applyTimeWarning($allNearby, 'now');
+            usort($allNearby, fn($a, $b) => $a['distance'] <=> $b['distance']);
+            session([
+                'nearby_places'    => $allNearby,
+                'nearby_cached_at' => now(),
+            ]);
         }
 
         // --- Save ---
@@ -161,7 +217,8 @@ class RestaurantController extends Controller
             'rawQuery',
             'relaxed',
             'userLat',
-            'userLng'
+            'userLng',
+            'promotedPlace'
         ));
     }
 }
