@@ -36,6 +36,8 @@ class RestaurantController extends Controller
 
         $places = null;
 
+        $promotedPlaces = \App\Models\PromotedPlace::active()->latest()->get();
+
         // Use cached data if it exists and is fresh enough
         if ($cachedAt && now()->diffInSeconds($cachedAt) < $maxAgeSeconds) {
             $places    = session($cacheKey);
@@ -62,7 +64,7 @@ class RestaurantController extends Controller
             ]);
         }
 
-        return view('restaurants.browse', compact('places', 'fromCache'));
+        return view('restaurants.browse', compact('places', 'fromCache', 'promotedPlaces'));
     }
 
     // Handle the search request
