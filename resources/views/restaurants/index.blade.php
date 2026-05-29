@@ -46,78 +46,51 @@
                 <p class="mt-2 text-sm" style="color:#525252">Choose how you want to decide.</p>
             </div>
 
-            {{-- Location Selector --}}
-            <div class="mb-6 fade-up-delay-2" x-data="locationPicker()">
+            {{-- Location Selector (Powered by unified component) --}}
+            <div class="mb-6 fade-up-delay-2" x-data="googleMapPicker({ mode: 'user' })">
                 <input type="hidden" id="global-latitude"  x-model="lat">
                 <input type="hidden" id="global-longitude" x-model="lng">
 
-                <div class="bg-white rounded-2xl p-4"
-                     style="box-shadow:0 4px 24px rgba(0,0,0,0.08); border:1.5px solid #F0F0EF">
+                <div class="bg-white rounded-2xl p-4" style="box-shadow:0 4px 24px rgba(0,0,0,0.08); border:1.5px solid #F0F0EF">
 
-                    <p class="font-bold uppercase tracking-widest mb-3" style="font-size:10px; color:#A3A3A3">
-                        📍 Your Location
-                    </p>
+                    <div class="flex items-center justify-between mb-3">
+                        <p class="font-bold uppercase tracking-widest" style="font-size:10px; color:#A3A3A3">📍 Your Location</p>
+                        
+                        {{-- Loading Spinner (Graceful UI) --}}
+                        <div x-show="status === 'loading'" class="flex items-center gap-2">
+                            <div class="w-3 h-3 rounded-full border-2 border-emerald-600 border-t-transparent animate-spin"></div>
+                            <span class="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Waiting for GPS...</span>
+                        </div>
+                    </div>
 
-                    <div class="flex items-center justify-between gap-3">
+                    {{-- Detect Button & Feedback --}}
+                    <div class="flex items-center justify-between gap-3 mb-4">
                         <div class="flex-1">
                             <p class="text-sm font-medium" style="color:#1A1A1A" x-text="label"></p>
                             <p class="text-xs font-mono mt-0.5" style="color:#A3A3A3"
-                               x-show="lat && lng"
+                               x-show="status === 'ready' || status === 'denied'"
                                x-text="`${parseFloat(lat).toFixed(4)}, ${parseFloat(lng).toFixed(4)}`">
                             </p>
-                            <p class="text-xs mt-0.5" style="color:#EF4444"
-                               x-show="error" x-text="error">
-                            </p>
                         </div>
-                        <button type="button"
-                                @click="detectLocation()"
-                                :disabled="detecting"
+                        <button type="button" @click="detectLocation()" :disabled="status === 'loading'"
                                 class="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl transition-all duration-200 active:scale-95"
                                 style="background:#F0FDF4; color:#059669; border:1px solid #BBF7D0">
-                            <span x-show="!detecting">📡 Detect</span>
-                            <span x-show="detecting">Detecting...</span>
+                            📡 Detect
                         </button>
                     </div>
 
-                    <div class="flex items-center gap-2 my-3">
-                        <div class="flex-1 h-px" style="background:#F0F0EF"></div>
-                        <p class="text-xs" style="color:#A3A3A3">or set manually</p>
-                        <div class="flex-1 h-px" style="background:#F0F0EF"></div>
-                    </div>
-
-                    <div x-show="!showManual">
-                        <button type="button"
-                                @click="showManual = true"
-                                class="w-full text-xs font-medium py-2 rounded-xl border transition-colors"
-                                style="color:#525252; border-color:#E5E5E5">
-                            🔍 Set a different location
-                        </button>
-                    </div>
-
-                    <div x-show="showManual" class="space-y-2">
-                        <input type="text"
-                               x-model="manualSearch"
-                               placeholder="e.g. Hotel Tentrem Semarang"
-                               class="w-full text-sm px-3 py-2 rounded-xl border focus:outline-none"
-                               style="border-color:#E5E5E5; color:#1A1A1A"
-                               @keydown.enter.prevent="geocodeLocation()">
-                        <div class="flex gap-2">
-                            <button type="button"
-                                    @click="geocodeLocation()"
-                                    :disabled="geocoding"
-                                    class="flex-1 text-xs font-semibold py-2 rounded-xl text-white transition-all active:scale-95"
-                                    style="background:#059669">
-                                <span x-show="!geocoding">Search</span>
-                                <span x-show="geocoding">Searching...</span>
-                            </button>
-                            <button type="button"
-                                    @click="showManual = false"
-                                    class="text-xs px-3 py-2 rounded-xl border"
-                                    style="color:#525252; border-color:#E5E5E5">
-                                Cancel
-                            </button>
+                    {{-- Unified Map & Search Area (Hidden until interacted with) --}}
+                    <div x-show="status === 'ready' || status === 'denied'" class="mt-4 pt-4 border-t border-neutral-100">
+                        <div class="relative mb-3">
+                            <input type="text" x-ref="searchBox" 
+                                placeholder="Search a mall, street, or landmark..."
+                                class="w-full rounded-xl border-neutral-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 text-sm py-2 px-3"
+                                @keydown.enter.prevent>
                         </div>
+                        <div x-ref="mapDiv" class="w-full h-48 rounded-xl border border-neutral-300 hidden"></div>
+                        <p class="text-[10px] text-neutral-400 mt-2 text-center">You can drag the pin to adjust your location.</p>
                     </div>
+
                 </div>
             </div>
             
@@ -372,144 +345,9 @@
 [x-cloak] { display: none !important; }
 </style>
 
-<script>
-function searchForm() {
-    return {
-        screen: 'input',
-        mode: 'nlp',
-        focused: false,
-        visibleSteps: [],
-        filter: {
-            food: 'any',
-            price: 4,
-            distance: 3000,
-        },
-        allSteps: [
-            '> Reading your query...',
-            '> Extracting intent with NLP...',
-            '> Fetching nearby restaurants...',
-            '> Applying food match filter...',
-            '> Running SAW algorithm...',
-            '> Ranking results...',
-        ],
-        filterSteps: [
-            '> Reading your preferences...',
-            '> Fetching nearby restaurants...',
-            '> Applying filters...',
-            '> Running SAW algorithm...',
-            '> Ranking results...',
-        ],
-        filterSummary() {
-            const foodLabels = {
-                any:'Anything', ramen:'Ramen', sushi:'Sushi',
-                indonesian:'Indonesian', burger:'Burger',
-                pizza:'Pizza', chicken:'Chicken', coffee:'Coffee'
-            };
-            const distLabels = {500:'Walking distance', 1000:'Under 1km', 2000:'Under 2km', 3000:'Under 3km'};
-            const price = '$'.repeat(this.filter.price);
-            return `${foodLabels[this.filter.food]} · ${price} · ${distLabels[this.filter.distance]}`;
-        },
-        handleSubmit(e) {
-            // Submit NLP
-            if (this.mode === 'nlp') {
-                const inputBox = e.target.querySelector('input[name="query"]');
-                if (!inputBox || inputBox.value.trim().length < 3) return;
-            }
+@push('scripts')
 
-            // Sync location into whichever form is being submitted
-            const lat = document.getElementById('global-latitude')?.value || '-6.2233';
-            const lng = document.getElementById('global-longitude')?.value || '106.6491';
+<script src="https://maps.googleapis.com/maps/api/js?key={{ env('GOOGLE_MAPS_API_KEY') }}&libraries=places"></script>
 
-            if (this.mode === 'nlp') {
-                document.getElementById('nlp-lat').value = lat;
-                document.getElementById('nlp-lng').value = lng;
-            } else {
-                document.getElementById('filter-lat').value = lat;
-                document.getElementById('filter-lng').value = lng;
-            }
-
-            this.screen = 'processing';
-            this.visibleSteps = [];
-
-            const steps = this.mode === 'nlp' ? this.allSteps : this.filterSteps;
-            let i = 0;
-            const interval = setInterval(() => {
-                if (i < steps.length) {
-                    this.visibleSteps.push(steps[i]);
-                    i++;
-                } else {
-                    clearInterval(interval);
-                }
-            }, 900);
-
-            setTimeout(() => { e.target.submit(); }, 900);
-        }
-    }
-}
-
-function locationPicker() {
-    return {
-        lat: '-6.2233',
-        lng: '106.6491',
-        label: 'Binus Alam Sutera (default)',
-        error: '',
-        detecting: false,
-        geocoding: false,
-        showManual: false,
-        manualSearch: '',
-
-        detectLocation() {
-            if (!navigator.geolocation) {
-                this.error = 'Geolocation not supported by your browser.';
-                return;
-            }
-            this.detecting = true;
-            this.error = '';
-
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    this.lat   = position.coords.latitude.toString();
-                    this.lng   = position.coords.longitude.toString();
-                    this.label = 'Current location detected';
-                    this.detecting = false;
-                },
-                () => {
-                    this.detecting = false;
-                    this.error = 'Could not detect location. Allow access or set manually.';
-                },
-                { timeout: 10000, enableHighAccuracy: true }
-            );
-        },
-
-        async geocodeLocation() {
-            if (!this.manualSearch.trim()) return;
-            this.geocoding = true;
-            this.error = '';
-
-            try {
-                const apiKey = '{{ config("services.google_places.key") }}';
-                const query  = encodeURIComponent(this.manualSearch);
-                const url    = `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${apiKey}`;
-                const res    = await fetch(url);
-                const data   = await res.json();
-
-                if (data.status === 'OK' && data.results.length > 0) {
-                    const loc      = data.results[0].geometry.location;
-                    this.lat       = loc.lat.toString();
-                    this.lng       = loc.lng.toString();
-                    this.label     = data.results[0].formatted_address;
-                    this.showManual   = false;
-                    this.manualSearch = '';
-                } else {
-                    this.error = 'Location not found. Try a more specific name.';
-                }
-            } catch (e) {
-                this.error = 'Search failed. Check your connection.';
-            }
-
-            this.geocoding = false;
-        }
-    }
-}
-</script>
+@endpush
 </x-app-layout>

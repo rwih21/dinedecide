@@ -125,7 +125,7 @@ class RestaurantController extends Controller
         $intent['MaxBudget'] = $userBudget;
 
         // Fetch Promoted Place
-        $promotedPlace = $this->promotions->pick($intent);
+        $promotedPlaces = $this->promotions->pick($intent);
 
         // --- Fetch candidates with dynamic location ---
         $candidates = $this->places->getNearbyRestaurants(
@@ -220,7 +220,7 @@ class RestaurantController extends Controller
             'relaxed',
             'userLat',
             'userLng',
-            'promotedPlace'
+            'promotedPlaces'
         ));
     }
 }

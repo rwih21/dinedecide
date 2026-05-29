@@ -67,27 +67,37 @@
                    placeholder="e.g. Jl. Pahlawan No. 12, Alam Sutera">
         </div>
 
-        {{-- Lat / Lng --}}
-        <div class="grid grid-cols-2 gap-3">
-            <div>
-                <label class="block text-xs font-bold uppercase tracking-widest text-neutral-400 mb-1.5">
-                    Latitude
-                </label>
-                <input type="text" name="latitude"
-                       value="{{ old('latitude', $place->latitude) }}"
-                       class="w-full text-sm px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition font-mono"
-                       style="border-color:#E5E5E5; color:#1A1A1A"
-                       placeholder="-6.2233">
+        {{-- Location Picker --}}
+        <div class="mb-6" 
+            x-data="googleMapPicker({
+                mode: 'admin',
+                lat: {{ $place->latitude ? $place->latitude : 'null' }}, 
+                lng: {{ $place->longitude ? $place->longitude : 'null' }}
+            })">
+            
+            <label class="block text-sm font-bold text-neutral-700 mb-2">Location (Pin on Map)</label>
+            
+            {{-- Autocomplete Box --}}
+            <div class="relative mb-3">
+                <input type="text" x-ref="searchBox" 
+                    placeholder="Search for the restaurant name or address..."
+                    class="w-full rounded-xl border-neutral-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 text-sm py-2.5 px-4"
+                    @keydown.enter.prevent>
             </div>
-            <div>
-                <label class="block text-xs font-bold uppercase tracking-widest text-neutral-400 mb-1.5">
-                    Longitude
-                </label>
-                <input type="text" name="longitude"
-                       value="{{ old('longitude', $place->longitude) }}"
-                       class="w-full text-sm px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition font-mono"
-                       style="border-color:#E5E5E5; color:#1A1A1A"
-                       placeholder="106.6491">
+
+            {{-- The Map Canvas --}}
+            <div x-ref="mapDiv" class="w-full h-64 rounded-xl border border-neutral-300 overflow-hidden mb-3"></div>
+
+            {{-- Coordinates (Submitted to DB) --}}
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Latitude</label>
+                    <input type="text" name="latitude" x-model="lat" readonly class="w-full bg-neutral-50 rounded-lg border-neutral-200 text-sm text-neutral-500">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Longitude</label>
+                    <input type="text" name="longitude" x-model="lng" readonly class="w-full bg-neutral-50 rounded-lg border-neutral-200 text-sm text-neutral-500">
+                </div>
             </div>
         </div>
 
@@ -211,5 +221,12 @@
 
     </form>
 </div>
+@push('scripts')
+{{-- Load Google Maps API with the Places library --}}
+<script src="https://maps.googleapis.com/maps/api/js?key={{ env('GOOGLE_MAPS_API_KEY') }}&libraries=places"></script>
+@endpush
 </div>
+
+
 </x-app-layout>
+
