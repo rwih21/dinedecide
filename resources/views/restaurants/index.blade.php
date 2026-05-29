@@ -11,23 +11,6 @@
 
     <div class="relative w-full max-w-md" x-data="searchForm()" x-cloak>
 
-        {{-- Header --}}
-        <div class="flex items-center justify-between mb-10 fade-up">
-            <div class="flex items-center gap-3">
-                <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:#059669">
-                    <span class="text-white font-bold text-sm">DD</span>
-                </div>
-                <span class="font-bold text-lg" style="color:#1A1A1A">DineDecide</span>
-            </div>
-            <div class="text-right">
-                <p class="font-bold uppercase tracking-widest mt-0.5" style="color:#525252; font-size:10px"
-                   x-data="{ time: '' }"
-                   x-init="const u=()=>{time=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})};u();setInterval(u,1000)"
-                   x-text="time">
-                </p>
-            </div>
-        </div>
-
         {{-- INPUT SCREEN --}}
         <div x-show="screen === 'input'"
              x-transition:enter="transition ease-out duration-300"

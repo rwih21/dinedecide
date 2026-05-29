@@ -152,7 +152,7 @@
                         :style="active === '{{ $type }}'
                             ? 'background:#059669; color:white; border-color:#059669'
                             : 'background:white; color:#525252; border-color:#E5E5E5'">
-                    {{ $type }}
+                    {{ \Illuminate\Support\Str::headline($type) }}
                 </button>
                 @endforeach
             </div>
@@ -193,7 +193,7 @@
                                 @foreach($place['types'] as $type)
                                 <span class="text-[10px] px-2 py-0.5 rounded-full capitalize font-medium"
                                       style="background:#F0F0EF; color:#525252">
-                                    {{ $type }}
+                                    {{ \Illuminate\Support\Str::headline($type) }}
                                 </span>
                                 @endforeach
                             </div>
