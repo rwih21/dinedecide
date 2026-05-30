@@ -258,19 +258,25 @@ class GooglePlacesService
 
     public function applyFoodMatch(array $candidates, string $foodType): array
     {
-        if ($foodType === 'any') {
-            return array_map(function ($r) {
-                $r['food_match'] = 1;
-                return $r;
-            }, $candidates);
-        }
-
+        // If the user didn't specify a food, or if we explicitly searched Google 
+        // using this foodType, we inherently TRUST that Google returned valid matches.
+        // We give them all a baseline food_match of 1 so SAW doesn't delete them.
         return array_map(function ($r) use ($foodType) {
-            $direct  = in_array($foodType, $r['types']);
-            $partial = !$direct && collect($r['types'])->contains(
-                fn($t) => str_contains($t, $foodType) || str_contains($foodType, $t)
-            );
-            $r['food_match'] = ($direct || $partial) ? 1 : 0;
+            $r['food_match'] = 1; 
+
+            // Optional: Give a slight SAW score BOOST (+0.5) if the Google category 
+            // strictly matches, just as an extra reward for perfect categorization.
+            if ($foodType !== 'any') {
+                $direct  = in_array($foodType, $r['types']);
+                $partial = !$direct && collect($r['types'])->contains(
+                    fn($t) => str_contains($t, $foodType) || str_contains($foodType, $t)
+                );
+                
+                if ($direct || $partial) {
+                    $r['food_match'] = 1.5; // Extra weight for exact categorical match
+                }
+            }
+
             return $r;
         }, $candidates);
     }
