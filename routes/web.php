@@ -24,10 +24,10 @@ Route::middleware('auth')->group(function () {
 });
 
 // Add temporarily to web.php, remove after testing
-Route::get('/clear-cache', function () {
-    session()->forget(['nearby_places', 'nearby_cached_at']);
-    return 'Cache cleared!';
-})->middleware('auth');
+// Route::get('/clear-cache', function () {
+//     session()->forget(['nearby_places', 'nearby_cached_at']);
+//     return 'Cache cleared!';
+// })->middleware('auth');
 
 // Admin routes
 Route::middleware(['auth', 'is_admin'])->prefix('admin')->name('admin.')->group(function () {

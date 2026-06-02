@@ -103,8 +103,6 @@
                     </div>
                 </div>
             </div>
-            
-
 
             {{-- Mode toggle --}}
             <div class="flex gap-2 mb-6 p-1 rounded-2xl fade-up-delay-2" style="background:#F0F0EF">
@@ -145,7 +143,6 @@
                         <input
                             type="text"
                             name="query"
-                            {{-- rows="1" --}}
                             @focus="focused = true"
                             @blur="focused = false"
                             placeholder="e.g. I want spicy ramen near Binus under 50k..."
@@ -167,18 +164,6 @@
                             </a>
                         </p>
 
-                        {{-- Quick tags --}}
-                        {{-- <div class="flex flex-wrap gap-2 mt-3">
-                            @foreach(['Quick lunch', 'Date night', 'Budget meal', 'Ramen nearby'] as $tag)
-                            <button type="button"
-                                    @click="$el.closest('form').querySelector('textarea').value = '{{ $tag }}'"
-                                    class="text-xs px-3 py-1 rounded-full border transition-colors duration-150"
-                                    style="border-color:#E5E5E5; color:#525252">
-                                {{ $tag }}
-                            </button>
-                            @endforeach
-                        </div> --}}
-
                         <div class="flex items-center justify-between pt-3">
                             <p class="text-xs" style="color:#D4D4D4"></p>
                             <button type="submit"
@@ -194,7 +179,7 @@
                 </form>
             </div>
 
-            {{-- MODE B: Filter chips --}}
+            {{-- MODE B: Filter --}}
             <div x-show="mode === 'filter'"
                  x-transition:enter="transition ease-out duration-200"
                  x-transition:enter-start="opacity-0 translate-x-2"
@@ -205,86 +190,154 @@
                     <input type="hidden" name="mode" value="filter">
                     <input type="hidden" name="latitude"  id="filter-lat">
                     <input type="hidden" name="longitude" id="filter-lng">
-                    <input type="hidden" name="food_type" :value="filter.food">
-                    <input type="hidden" name="max_price" :value="filter.price">
+                    <input type="hidden" name="food_type"    :value="filter.food">
+                    <input type="hidden" name="max_price"    :value="filter.price">
                     <input type="hidden" name="max_distance" :value="filter.distance">
+                    <input type="hidden" name="visit_time"   :value="filter.visitTime">
 
-                    <div class="bg-white rounded-2xl p-5 space-y-5"
+                    <div class="bg-white rounded-2xl overflow-hidden"
                          style="box-shadow: 0 4px 24px rgba(0,0,0,0.08); border:1.5px solid #F0F0EF">
 
-                        {{-- Food type --}}
-                        <div>
+                        {{-- ── SECTION 1: Food Type ── --}}
+                        <div class="p-5" style="border-bottom: 1px solid #F5F5F5">
                             <p class="font-bold uppercase tracking-widest mb-3" style="font-size:10px; color:#A3A3A3">
                                 What are you craving?
                             </p>
                             <div class="flex flex-wrap gap-2">
                                 @foreach([
-                                    'any'        => '🍽️ Anything',
-                                    'ramen'      => '🍜 Ramen',
-                                    'sushi'      => '🍣 Sushi',
-                                    'indonesian' => '🍛 Indonesian',
-                                    'burger'     => '🍔 Burger',
-                                    'pizza'      => '🍕 Pizza',
-                                    'chicken'    => '🍗 Chicken',
-                                    'coffee'     => '☕ Coffee',
-                                ] as $value => $label)
+                                    'any'        => ['emoji' => '🍽️', 'label' => 'Anything'],
+                                    'indonesian' => ['emoji' => '🍛', 'label' => 'Indonesian'],
+                                    'chicken'    => ['emoji' => '🍗', 'label' => 'Chicken'],
+                                    'ramen'      => ['emoji' => '🍜', 'label' => 'Ramen'],
+                                    'sushi'      => ['emoji' => '🍣', 'label' => 'Sushi'],
+                                    'burger'     => ['emoji' => '🍔', 'label' => 'Burger'],
+                                    'pizza'      => ['emoji' => '🍕', 'label' => 'Pizza'],
+                                    'coffee'     => ['emoji' => '☕', 'label' => 'Coffee'],
+                                    'korean'     => ['emoji' => '🥘', 'label' => 'Korean'],
+                                    'seafood'    => ['emoji' => '🦐', 'label' => 'Seafood'],
+                                    'chinese'    => ['emoji' => '🥡', 'label' => 'Chinese'],
+                                    'steak'      => ['emoji' => '🥩', 'label' => 'Steak'],
+                                ] as $value => $item)
                                 <button type="button"
                                         @click="filter.food = '{{ $value }}'"
-                                        class="text-sm px-3 py-1.5 rounded-full border transition-all duration-150 font-medium"
+                                        class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border font-semibold transition-all duration-150"
                                         :style="filter.food === '{{ $value }}'
                                             ? 'background:#059669; color:white; border-color:#059669'
-                                            : 'background:white; color:#525252; border-color:#E5E5E5'">
-                                    {{ $label }}
+                                            : 'background:#FAFAFA; color:#525252; border-color:#E5E5E5'">
+                                    <span>{{ $item['emoji'] }}</span>
+                                    <span>{{ $item['label'] }}</span>
                                 </button>
                                 @endforeach
                             </div>
                         </div>
 
-                        {{-- Price --}}
-                        <div>
-                            <p class="font-bold uppercase tracking-widest mb-3" style="font-size:10px; color:#A3A3A3">
-                                Budget?
-                            </p>
-                            <div class="flex gap-2">
-                                @foreach([1 => '$', 2 => '$$', 3 => '$$$', 4 => '$$$$'] as $level => $label)
+                        {{-- ── SECTION 2: Price Slider ── --}}
+                        <div class="p-5" style="border-bottom: 1px solid #F5F5F5">
+                            <div class="flex items-center justify-between mb-3">
+                                <p class="font-bold uppercase tracking-widest" style="font-size:10px; color:#A3A3A3">
+                                    Max Budget
+                                </p>
+                                <p class="text-sm font-bold tabular-nums" style="color:#059669; font-family:'JetBrains Mono',monospace"
+                                   x-text="filter.price === 0 ? 'Any price' : 'Up to Rp ' + filter.price.toLocaleString('id-ID')">
+                                </p>
+                            </div>
+
+                            {{-- Slider --}}
+                            <div class="relative px-1">
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="200000"
+                                    step="5000"
+                                    x-model.number="filter.price"
+                                    class="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                                    style="accent-color: #059669; background: linear-gradient(to right, #059669 0%, #059669 var(--pct, 0%), #E5E5E5 var(--pct, 0%), #E5E5E5 100%)"
+                                    @input="updateSliderFill($event)"
+                                    x-init="$nextTick(() => updateSliderFill({ target: $el }))"
+                                >
+                            </div>
+
+                            {{-- Tick labels --}}
+                            <div class="flex justify-between mt-2 px-1">
+                                <span class="text-[10px] font-medium" style="color:#A3A3A3">Any</span>
+                                <span class="text-[10px] font-medium" style="color:#A3A3A3">50k</span>
+                                <span class="text-[10px] font-medium" style="color:#A3A3A3">100k</span>
+                                <span class="text-[10px] font-medium" style="color:#A3A3A3">150k</span>
+                                <span class="text-[10px] font-medium" style="color:#A3A3A3">200k</span>
+                            </div>
+
+                            {{-- Quick preset chips --}}
+                            <div class="flex gap-2 mt-3">
+                                @foreach([0 => 'Any', 30000 => 'Under 30k', 50000 => 'Under 50k', 100000 => 'Under 100k'] as $val => $label)
                                 <button type="button"
-                                        @click="filter.price = {{ $level }}"
-                                        class="flex-1 py-2 rounded-xl border text-sm font-mono font-semibold transition-all duration-150"
-                                        :style="filter.price === {{ $level }}
+                                        @click="filter.price = {{ $val }}; updateSliderFill({ target: $el.closest('div.p-5').querySelector('input[type=range]') })"
+                                        class="flex-1 text-[10px] font-semibold py-1.5 rounded-lg border transition-all duration-150"
+                                        :style="filter.price === {{ $val }}
                                             ? 'background:#059669; color:white; border-color:#059669'
-                                            : 'background:white; color:#525252; border-color:#E5E5E5'">
+                                            : 'background:#FAFAFA; color:#525252; border-color:#E5E5E5'">
                                     {{ $label }}
                                 </button>
                                 @endforeach
                             </div>
                         </div>
 
-                        {{-- Distance --}}
-                        <div>
+                        {{-- ── SECTION 3: Distance ── --}}
+                        <div class="p-5" style="border-bottom: 1px solid #F5F5F5">
                             <p class="font-bold uppercase tracking-widest mb-3" style="font-size:10px; color:#A3A3A3">
                                 How far?
                             </p>
-                            <div class="flex gap-2">
-                                @foreach([500 => 'Walking', 1000 => '< 1km', 2000 => '< 2km', 3000 => '< 3km'] as $meters => $label)
+                            <div class="grid grid-cols-4 gap-2">
+                                @foreach([
+                                    500  => ['label' => 'Walking',  'sub' => '< 500m'],
+                                    1000 => ['label' => 'Close',    'sub' => '< 1km'],
+                                    2000 => ['label' => 'Nearby',   'sub' => '< 2km'],
+                                    3000 => ['label' => 'Anywhere', 'sub' => '< 3km'],
+                                ] as $meters => $item)
                                 <button type="button"
                                         @click="filter.distance = {{ $meters }}"
-                                        class="flex-1 py-2 rounded-xl border text-xs font-semibold transition-all duration-150"
+                                        class="flex flex-col items-center py-2.5 px-1 rounded-xl border transition-all duration-150"
                                         :style="filter.distance === {{ $meters }}
                                             ? 'background:#059669; color:white; border-color:#059669'
-                                            : 'background:white; color:#525252; border-color:#E5E5E5'">
-                                    {{ $label }}
+                                            : 'background:#FAFAFA; color:#525252; border-color:#E5E5E5'">
+                                    <span class="text-xs font-bold">{{ $item['label'] }}</span>
+                                    <span class="text-[9px] mt-0.5 opacity-70">{{ $item['sub'] }}</span>
                                 </button>
                                 @endforeach
                             </div>
                         </div>
 
-                        {{-- Summary + Submit --}}
-                        <div class="pt-3" style="border-top:1px solid #F5F5F5">
-                            <p class="text-xs mb-3 font-mono" style="color:#A3A3A3">
-                                <span x-text="filterSummary()"></span>
+                        {{-- ── SECTION 4: Visit Time ── --}}
+                        <div class="p-5" style="border-bottom: 1px solid #F5F5F5">
+                            <p class="font-bold uppercase tracking-widest mb-3" style="font-size:10px; color:#A3A3A3">
+                                When are you going?
                             </p>
+                            <div class="grid grid-cols-3 gap-2">
+                                @foreach([
+                                    'now'       => ['emoji' => '⚡', 'label' => 'Right now'],
+                                    'morning'   => ['emoji' => '🌅', 'label' => 'Morning'],
+                                    'lunch'     => ['emoji' => '☀️',  'label' => 'Lunch'],
+                                    'afternoon' => ['emoji' => '🌤️', 'label' => 'Afternoon'],
+                                    'evening'   => ['emoji' => '🌆', 'label' => 'Evening'],
+                                    'night'     => ['emoji' => '🌙', 'label' => 'Night'],
+                                ] as $value => $item)
+                                <button type="button"
+                                        @click="filter.visitTime = '{{ $value }}'"
+                                        class="flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all duration-150"
+                                        :style="filter.visitTime === '{{ $value }}'
+                                            ? 'background:#059669; color:white; border-color:#059669'
+                                            : 'background:#FAFAFA; color:#525252; border-color:#E5E5E5'">
+                                    <span>{{ $item['emoji'] }}</span>
+                                    <span>{{ $item['label'] }}</span>
+                                </button>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        {{-- ── FOOTER: Summary + Submit ── --}}
+                        <div class="p-5">
+                            <p class="text-xs font-mono mb-4 px-1" style="color:#A3A3A3" x-text="filterSummary()"></p>
                             <button type="submit"
-                                    class="w-full flex items-center justify-center gap-2 text-sm font-semibold text-white py-3 rounded-xl transition-all duration-200 active:scale-95"
+                                    class="w-full flex items-center justify-center gap-2 text-sm font-semibold text-white py-3.5 rounded-xl transition-all duration-200 active:scale-95"
                                     style="background:#059669">
                                 Find places
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -292,6 +345,7 @@
                                 </svg>
                             </button>
                         </div>
+
                     </div>
                 </form>
             </div>
@@ -353,6 +407,36 @@
 <style>
 @keyframes spin { to { transform: rotate(360deg); } }
 [x-cloak] { display: none !important; }
+
+/* Slider thumb styling */
+input[type='range']::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #059669;
+    cursor: pointer;
+    border: 3px solid white;
+    box-shadow: 0 1px 6px rgba(5,150,105,0.4);
+    transition: transform 0.15s ease;
+}
+input[type='range']::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+input[type='range']::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #059669;
+    cursor: pointer;
+    border: 3px solid white;
+    box-shadow: 0 1px 6px rgba(5,150,105,0.4);
+}
+input[type='range']::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 9999px;
+}
 </style>
 
 <script>
@@ -364,8 +448,9 @@ function searchForm() {
         visibleSteps: [],
         filter: {
             food: 'any',
-            price: 4,
+            price: 0,
             distance: 3000,
+            visitTime: 'now',
         },
         allSteps: [
             '> Reading your query...',
@@ -382,25 +467,48 @@ function searchForm() {
             '> Running SAW algorithm...',
             '> Ranking results...',
         ],
+
+        updateSliderFill(e) {
+            const el  = e.target;
+            const min = parseFloat(el.min) || 0;
+            const max = parseFloat(el.max) || 200000;
+            const val = parseFloat(el.value) || 0;
+            const pct = ((val - min) / (max - min)) * 100;
+            el.style.setProperty('--pct', pct + '%');
+            el.style.background = `linear-gradient(to right, #059669 0%, #059669 ${pct}%, #E5E5E5 ${pct}%, #E5E5E5 100%)`;
+        },
+
         filterSummary() {
             const foodLabels = {
-                any:'Anything', ramen:'Ramen', sushi:'Sushi',
-                indonesian:'Indonesian', burger:'Burger',
-                pizza:'Pizza', chicken:'Chicken', coffee:'Coffee'
+                any:'Anything', indonesian:'Indonesian', chicken:'Chicken',
+                ramen:'Ramen', sushi:'Sushi', burger:'Burger', pizza:'Pizza',
+                coffee:'Coffee', korean:'Korean', seafood:'Seafood',
+                chinese:'Chinese', steak:'Steak'
             };
-            const distLabels = {500:'Walking distance', 1000:'Under 1km', 2000:'Under 2km', 3000:'Under 3km'};
-            const price = '$'.repeat(this.filter.price);
-            return `${foodLabels[this.filter.food]} · ${price} · ${distLabels[this.filter.distance]}`;
+            const distLabels = {
+                500:'Walking distance', 1000:'Under 1km',
+                2000:'Under 2km', 3000:'Under 3km'
+            };
+            const timeLabels = {
+                now:'Right now', morning:'Morning', lunch:'Lunch',
+                afternoon:'Afternoon', evening:'Evening', night:'Night'
+            };
+            const priceStr = this.filter.price === 0
+                ? 'any price'
+                : 'up to Rp ' + this.filter.price.toLocaleString('id-ID');
+
+            return `> ${foodLabels[this.filter.food]} · ${priceStr} · ${distLabels[this.filter.distance]} · ${timeLabels[this.filter.visitTime]}`;
         },
+
         handleSubmit(e) {
-            // Submit NLP
+            e.preventDefault();
+
             if (this.mode === 'nlp') {
                 const inputBox = e.target.querySelector('input[name="query"]');
                 if (!inputBox || inputBox.value.trim().length < 3) return;
             }
 
-            // Sync location into whichever form is being submitted
-            const lat = document.getElementById('global-latitude')?.value || '-6.2233';
+            const lat = document.getElementById('global-latitude')?.value  || '-6.2233';
             const lng = document.getElementById('global-longitude')?.value || '106.6491';
 
             if (this.mode === 'nlp') {
