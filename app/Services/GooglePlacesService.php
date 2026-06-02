@@ -26,10 +26,23 @@ class GooglePlacesService
             return [];
         }
 
-        $query = 'Restaurant';
-        if ($foodType !== 'any') {
-            $query = $foodType . ' restaurant';
-        }
+        // $query = 'Restaurant';
+        // if ($foodType !== 'any') {
+        //     $query = $foodType . ' restaurant';
+        // }
+
+        $categoryMap = [
+            'coffee'     => 'coffee shop',
+            'ramen'      => 'ramen',
+            'sushi'      => 'sushi restaurant',
+            'burger'     => 'burger',
+            'pizza'      => 'pizza',
+            'indonesian' => 'Indonesian food',
+            'chicken'    => 'ayam',
+        ];
+
+        $query = $categoryMap[$foodType] 
+            ?? ($foodType !== 'any' ? $foodType : 'restaurant');
 
         $response = Http::withHeaders([
             'X-Goog-Api-Key' => $this->apiKey,
@@ -51,6 +64,12 @@ class GooglePlacesService
         }
 
         $places = $response->json('places') ?? [];
+
+        // log
+        \Log::info('Raw Google results for "' . $query . '": ' . 
+            implode(', ', array_column(array_column($places, 'displayName'), 'text'))
+        );
+
         $mapped = $this->mapResults($places, $userLat, $userLng);
 
         if ($userBudget > 0) {
@@ -166,7 +185,7 @@ class GooglePlacesService
         $noise = [
             'restaurant', 'food', 'point_of_interest',
             'establishment', 'store', 'meal_takeaway',
-            'meal_delivery', 'cafe', 'bar',
+            'meal_delivery', 'bar',
         ];
 
         $map = [
@@ -178,6 +197,7 @@ class GooglePlacesService
             'pizza_restaurant'      => 'pizza',
             'chicken_restaurant'    => 'chicken',
             'coffee_shop'           => 'coffee',
+            'cafe'                  => 'coffee',
             'fast_food_restaurant'  => 'fastfood',
         ];
 
@@ -272,9 +292,9 @@ class GooglePlacesService
                     fn($t) => str_contains($t, $foodType) || str_contains($foodType, $t)
                 );
                 
-                if ($direct || $partial) {
-                    $r['food_match'] = 1.5; // Extra weight for exact categorical match
-                }
+                // if ($direct || $partial) {
+                //     $r['food_match'] = 1.5; // Extra weight for exact categorical match
+                // }
             }
 
             return $r;

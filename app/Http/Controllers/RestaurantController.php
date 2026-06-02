@@ -23,7 +23,10 @@ class RestaurantController extends Controller
     // Show the main search page
     public function index()
     {
-        return view('restaurants.index');
+        return view('restaurants.index', [
+            'lastLat' => session('last_lat', -6.2233),
+            'lastLng' => session('last_lng', 106.6491),
+        ]);
     }
 
     // Browse all nearby places (with session cache)
@@ -146,6 +149,21 @@ class RestaurantController extends Controller
             $candidates,
             fn($r) => $intent['MaxBudget'] === 0 || $r['exact_price'] <= ($intent['MaxBudget'] * 1.5)
         ));
+
+        // Deduplicate chains — keep only the closest branch
+        $seen = [];
+        $candidates = array_filter($candidates, function($r) use (&$seen) {
+            // Strip common branch suffixes to get base brand name
+            $baseName = preg_replace('/[-–|@]\s*.+$/', '', $r['name']);
+            $baseName = strtolower(trim($baseName));
+            
+            if (isset($seen[$baseName])) {
+                return false; // keep only first occurrence (closest, since sorted by distance)
+            }
+            $seen[$baseName] = true;
+            return true;
+        });
+        $candidates = array_values($candidates);
 
         $ranked = $this->saw->rank($candidates);
 

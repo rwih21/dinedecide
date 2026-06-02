@@ -145,7 +145,7 @@
                             name="query"
                             @focus="focused = true"
                             @blur="focused = false"
-                            placeholder="e.g. I want spicy ramen near Binus under 50k..."
+                            placeholder="e.g. I want spicy ramen under 50k..."
                             class="w-full bg-white border border-neutral-200 rounded-2xl py-5 pl-6 pr-14 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition duration-300 ease-in-out text-sm resize-none"
                             style="color:#1A1A1A"
                         />
@@ -540,9 +540,9 @@ function searchForm() {
 
 function locationPicker() {
     return {
-        lat: '-6.2233',
-        lng: '106.6491',
-        label: 'Binus Alam Sutera (default)',
+        lat: '{{ $lastLat }}',
+        lng: '{{ $lastLng }}',
+        label: '{{ $lastLat == -6.2233 && $lastLng == 106.6491 ? "Binus Alam Sutera (default)" : "Last used location" }}',
         error: '',
         detecting: false,
         geocoding: false,

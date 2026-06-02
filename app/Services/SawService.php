@@ -60,7 +60,7 @@ class SawService
     private function filterByFoodMatch(array $candidates): array
     {
         return array_values(
-            array_filter($candidates, fn($r) => $r['food_match'] === 1)
+            array_filter($candidates, fn($r) => $r['food_match'] > 0)
         );
     }
 
