@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Log;
 class NlpService
 {
     private Client $client;
-    private string $model = 'qwen2.5-coder:1.5b';
+    private string $model = 'qwen2.5:3b';
 
     public function __construct()
     {
@@ -40,7 +40,10 @@ class NlpService
             $body    = json_decode($response->getBody()->getContents(), true);
             $content = $body['choices'][0]['message']['content'] ?? '';
 
-            return $this->parseResponse($content);
+            // return $this->parseResponse($content);
+            $result = $this->parseResponse($content);
+            Log::info('NLP intent extracted', $result); // add this
+            return $result;
 
         } catch (GuzzleException $e) {
             Log::error('NlpService API error: ' . $e->getMessage());
@@ -56,13 +59,13 @@ class NlpService
         You are a structured entity extractor for a restaurant recommendation app.
         Extract the user's intent and return ONLY a valid JSON object — no markdown, no explanation, no extra text.
 
-        IMPORTANT: Each field has a strict allowed value list. Never return a value outside these lists.
+        IMPORTANT: Each field has strict rules.
 
-        Field rules:
-
-        "FoodType": The TYPE OF FOOD OR CUISINE only. Must be one of:
-            ramen, sushi, japanese, indonesian, burger, pizza, chicken, coffee, any
-            - "family dinner" / "date night" is NOT a food type return "any"
+        "FoodType": Extract the specific food, dish, or cuisine the user is asking for. Return it exactly as they typed it. 
+            - Example: "warm soup" -> "warm soup"
+            - Example: "spicy noodles" -> "spicy noodles"
+            - "family dinner" / "date night" is NOT a food type, return "any"
+            - If no specific food is mentioned, return "any".
 
         "MaxPrice": Exact integer in IDR based on the user's maximum budget.
             - "under 50k" or "50rb" = 50000
@@ -72,10 +75,10 @@ class NlpService
             - not mentioned = 0
 
         "MaxDistance": in meters:
-            nearby / dekat / near         = 1000
-            walking distance              = 500
-            a number in km                = that number * 1000
-            not mentioned                 = 3000
+            - nearby / dekat / near         = 1000
+            - walking distance              = 500
+            - a number in km                = that number * 1000
+            - not mentioned                 = 3000
 
         "Occasion": The SOCIAL CONTEXT or PURPOSE of the meal. Must be one of:
             family, romantic, formal, casual, any
@@ -83,8 +86,19 @@ class NlpService
         "VisitTime": WHEN they plan to visit. Must be one of:
             now, morning, lunch, afternoon, evening, night
 
-        Example input: "I want chicken and I am on a budget. Around 25k to 50k is ok"
-        Example output: {"FoodType": "chicken", "MaxPrice": 50000, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
+        English examples:
+        Input: "I want warm soup and I am on a budget. Around 25k to 50k is ok"
+        Output: {"FoodType": "warm soup", "MaxPrice": 50000, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
+
+        Indonesian examples:
+        Input: "aku mau minum kopi deket sini"
+        Output: {"FoodType": "coffee", "MaxPrice": 0, "MaxDistance": 1000, "Occasion": "any", "VisitTime": "now"}
+
+        Input: "cari nasi padang murah sekitar sini"
+        Output: {"FoodType": "indonesian", "MaxPrice": 30000, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
+
+        Input: "pengen ramen hangat malem ini"
+        Output: {"FoodType": "ramen", "MaxPrice": 0, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "night"}
 
         Return exactly this shape:
         {"FoodType": "any", "MaxPrice": 0, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
@@ -104,21 +118,22 @@ class NlpService
             return $this->fallbackIntent();
         }
 
-        $validFoodTypes = ['ramen','sushi','japanese','indonesian','burger','pizza','chicken','coffee','any'];
+        // Removed the $validFoodTypes array entirely!
         $validOccasions = ['family','romantic','formal','casual','any'];
         $validTimes     = ['now','morning','lunch','afternoon','evening','night'];
 
+        // Let the LLM string pass through untouched (just trimmed and lowercased)
         $foodType = strtolower(trim($data['FoodType'] ?? 'any'));
         $occasion = strtolower(trim($data['Occasion']  ?? 'any'));
         $visitTime = strtolower(trim($data['VisitTime'] ?? 'now'));
 
-        if (!in_array($foodType, $validFoodTypes)) $foodType = 'any';
+        // Only enforce rigid validation on Occasion and VisitTime
         if (!in_array($occasion, $validOccasions)) $occasion = 'any';
         if (!in_array($visitTime, $validTimes))    $visitTime = 'now';
 
         return [
             'FoodType'    => $foodType,
-            'MaxPrice'    => (int)   ($data['MaxPrice']    ?? 0), // Default to 0 (No limit)
+            'MaxPrice'    => (int)   ($data['MaxPrice']    ?? 0),
             'MaxDistance' => (float) ($data['MaxDistance'] ?? 3000),
             'Occasion'    => $occasion,
             'VisitTime'   => $visitTime,
@@ -129,7 +144,7 @@ class NlpService
     {
         return [
             'FoodType'    => 'any',
-            'MaxPrice'    => 4,
+            'MaxPrice'    => 0,
             'MaxDistance' => 3000.0,
             'Occasion'    => 'any',
             'VisitTime'   => 'now',

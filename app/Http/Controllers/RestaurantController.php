@@ -23,7 +23,10 @@ class RestaurantController extends Controller
     // Show the main search page
     public function index()
     {
-        return view('restaurants.index');
+        return view('restaurants.index', [
+            'lastLat' => session('last_lat', -6.2233),
+            'lastLng' => session('last_lng', 106.6491),
+        ]);
     }
 
     // Browse all nearby places (with session cache)
@@ -67,15 +70,19 @@ class RestaurantController extends Controller
         return view('restaurants.browse', compact('places', 'fromCache', 'promotedPlaces'));
     }
 
+    
     // Handle the search request
+    
     public function search(Request $request)
     {
+        // dd($request->all());
         $request->validate([
             'mode'         => 'required|in:nlp,filter',
             'query'        => 'nullable|string|min:3|max:255',
             'food_type'    => 'nullable|string',
-            'max_price'    => 'nullable|integer|min:1|max:4',
+            'max_price'    => 'nullable|integer|min:0|max:200000',
             'max_distance' => 'nullable|integer',
+            'visit_time'   => 'nullable|string',
             'latitude'     => 'required|numeric|between:-90,90',
             'longitude'    => 'required|numeric|between:-180,180',
         ]);
@@ -99,16 +106,16 @@ class RestaurantController extends Controller
             $intent   = $this->nlp->extractIntent($rawQuery);
         } else {
             $rawQuery = 'Filter: '
-                . ($request->input('food_type', 'any')) . ', '
-                . '$' . str_repeat('$', (int)$request->input('max_price', 4) - 1) . ', '
+                . $request->input('food_type', 'any') . ', '
+                . 'Rp ' . number_format((int)$request->input('max_price', 0)) . ', '
                 . ($request->input('max_distance', 3000) / 1000) . 'km';
 
             $intent = [
                 'FoodType'    => $request->input('food_type', 'any'),
-                'MaxPrice'    => (int) $request->input('max_price', 4),
+                'MaxPrice'    => (int) $request->input('max_price', 0),
                 'MaxDistance' => (float) $request->input('max_distance', 3000),
                 'Occasion'    => 'any',
-                'VisitTime'   => 'now',
+                'VisitTime'   => $request->input('visit_time', 'now'),
             ];
         }
 
@@ -117,8 +124,7 @@ class RestaurantController extends Controller
         if ($request->input('mode') === 'nlp') {
             $userBudget = $intent['MaxPrice'] ?? 0;
         } else {
-            $budgetMap  = [1 => 30000, 2 => 75000, 3 => 150000, 4 => 300000];
-            $userBudget = $budgetMap[$intent['MaxPrice']] ?? 300000;
+            $userBudget = $intent['MaxPrice']; // already exact IDR from slider
         }
 
         // Save it to the intent so we can use it below
@@ -143,6 +149,21 @@ class RestaurantController extends Controller
             $candidates,
             fn($r) => $intent['MaxBudget'] === 0 || $r['exact_price'] <= ($intent['MaxBudget'] * 1.5)
         ));
+
+        // Deduplicate chains — keep only the closest branch
+        $seen = [];
+        $candidates = array_filter($candidates, function($r) use (&$seen) {
+            // Strip common branch suffixes to get base brand name
+            $baseName = preg_replace('/[-–|@]\s*.+$/', '', $r['name']);
+            $baseName = strtolower(trim($baseName));
+            
+            if (isset($seen[$baseName])) {
+                return false; // keep only first occurrence (closest, since sorted by distance)
+            }
+            $seen[$baseName] = true;
+            return true;
+        });
+        $candidates = array_values($candidates);
 
         $ranked = $this->saw->rank($candidates);
 
