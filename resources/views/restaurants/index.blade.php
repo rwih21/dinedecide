@@ -70,7 +70,7 @@
 
                     <div x-show="!showManual">
                         <button type="button"
-                                @click="showManual = true"
+                                @click="openMap()"
                                 class="w-full text-xs font-medium py-2 rounded-xl border transition-colors"
                                 style="color:#525252; border-color:#E5E5E5">
                             🔍 Set a different location
@@ -78,20 +78,33 @@
                     </div>
 
                     <div x-show="showManual" class="space-y-2">
-                        <input type="text"
-                               x-model="manualSearch"
-                               placeholder="e.g. Hotel Tentrem Semarang"
-                               class="w-full text-sm px-3 py-2 rounded-xl border focus:outline-none"
-                               style="border-color:#E5E5E5; color:#1A1A1A"
-                               @keydown.enter.prevent="geocodeLocation()">
+                        {{-- Search bar --}}
+                        <input 
+                            type="text"
+                            id="map-search-input"
+                            placeholder="e.g. Hotel Tentrem Semarang"
+                            class="w-full text-sm px-3 py-2 rounded-xl border focus:outline-none"
+                            style="border-color:#E5E5E5; color:#1A1A1A">
+                        
+                        {{-- Map container --}}
+                        <div 
+                            id="location-map" 
+                            style="width:100%; height:250px; border-radius:12px; border:1px solid #E5E5E5; overflow:hidden">
+                        </div>
+
+                        {{-- Coordinates feedback --}}
+                        <p class="text-[10px] font-mono text-neutral-400" 
+                        x-show="lat && lng"
+                        x-text="`Pin at: ${parseFloat(lat).toFixed(5)}, ${parseFloat(lng).toFixed(5)}`">
+                        </p>
+
+                        {{-- Actions --}}
                         <div class="flex gap-2">
                             <button type="button"
-                                    @click="geocodeLocation()"
-                                    :disabled="geocoding"
+                                    @click="confirmMapLocation()"
                                     class="flex-1 text-xs font-semibold py-2 rounded-xl text-white transition-all active:scale-95"
                                     style="background:#059669">
-                                <span x-show="!geocoding">Search</span>
-                                <span x-show="geocoding">Searching...</span>
+                                Confirm location
                             </button>
                             <button type="button"
                                     @click="showManual = false"
@@ -540,14 +553,15 @@ function searchForm() {
 
 function locationPicker() {
     return {
-        lat: '{{ $lastLat }}',
-        lng: '{{ $lastLng }}',
-        label: '{{ $lastLat == -6.2233 && $lastLng == 106.6491 ? "Binus Alam Sutera (default)" : "Last used location" }}',
+        lat: '{{ $lastLat ?? -6.2233 }}',
+        lng: '{{ $lastLng ?? 106.6491 }}',
+        label: '{{ isset($lastLat) && $lastLat != -6.2233 ? "Last used location" : "Binus Alam Sutera (default)" }}',
         error: '',
         detecting: false,
-        geocoding: false,
         showManual: false,
-        manualSearch: '',
+        map: null,
+        marker: null,
+        searchBox: null,
 
         detectLocation() {
             if (!navigator.geolocation) {
@@ -572,34 +586,66 @@ function locationPicker() {
             );
         },
 
-        async geocodeLocation() {
-            if (!this.manualSearch.trim()) return;
-            this.geocoding = true;
-            this.error = '';
+        openMap() {
+            this.showManual = true;
+            this.$nextTick(() => {
+                this.initMap();
+            });
+        },
 
-            try {
-                const apiKey = '{{ config("services.google_places.key") }}';
-                const query  = encodeURIComponent(this.manualSearch);
-                const url    = `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${apiKey}`;
-                const res    = await fetch(url);
-                const data   = await res.json();
+        initMap() {
+            const lat = parseFloat(this.lat) || -6.2233;
+            const lng = parseFloat(this.lng) || 106.6491;
+            const center = { lat, lng };
 
-                if (data.status === 'OK' && data.results.length > 0) {
-                    const loc      = data.results[0].geometry.location;
-                    this.lat       = loc.lat.toString();
-                    this.lng       = loc.lng.toString();
-                    this.label     = data.results[0].formatted_address;
-                    this.showManual   = false;
-                    this.manualSearch = '';
-                } else {
-                    this.error = 'Location not found. Try a more specific name.';
-                }
-            } catch (e) {
-                this.error = 'Search failed. Check your connection.';
-            }
+            // Init map
+            this.map = new google.maps.Map(document.getElementById('location-map'), {
+                center,
+                zoom: 15,
+                mapTypeControl: false,
+                streetViewControl: false,
+                fullscreenControl: false,
+            });
 
-            this.geocoding = false;
-        }
+            // Draggable marker
+            this.marker = new google.maps.Marker({
+                position: center,
+                map: this.map,
+                draggable: true,
+                animation: google.maps.Animation.DROP,
+            });
+
+            // Update coords when marker is dragged
+            this.marker.addListener('dragend', (event) => {
+                this.lat = event.latLng.lat().toString();
+                this.lng = event.latLng.lng().toString();
+                this.label = 'Custom pin location';
+            });
+
+            // Search box
+            const input = document.getElementById('map-search-input');
+            const searchBox = new google.maps.places.SearchBox(input);
+
+            searchBox.addListener('places_changed', () => {
+                const places = searchBox.getPlaces();
+                if (!places || places.length === 0) return;
+
+                const place = places[0];
+                if (!place.geometry || !place.geometry.location) return;
+
+                const location = place.geometry.location;
+                this.map.setCenter(location);
+                this.map.setZoom(16);
+                this.marker.setPosition(location);
+                this.lat   = location.lat().toString();
+                this.lng   = location.lng().toString();
+                this.label = place.name ?? place.formatted_address;
+            });
+        },
+
+        confirmMapLocation() {
+            this.showManual = false;
+        },
     }
 }
 </script>
