@@ -1,9 +1,10 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\RestaurantController;
 use App\Http\Controllers\Admin\PromotedPlaceController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RestaurantController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
@@ -24,10 +25,33 @@ Route::middleware('auth')->group(function () {
 });
 
 // Add temporarily to web.php, remove after testing
-// Route::get('/clear-cache', function () {
-//     session()->forget(['nearby_places', 'nearby_cached_at']);
-//     return 'Cache cleared!';
-// })->middleware('auth');
+Route::get('/clear-cache', function () {
+    session()->forget(['nearby_places', 'nearby_cached_at']);
+    return 'Cache cleared!';
+})->middleware('auth');
+
+Route::post('/location', function (Request $request) {
+    $request->validate([
+        'latitude'  => 'required|numeric|between:-90,90',
+        'longitude' => 'required|numeric|between:-180,180',
+    ]);
+
+    $newLat = (float) $request->latitude;
+    $newLng = (float) $request->longitude;
+    
+    $oldLat = session('last_lat');
+    $oldLng = session('last_lng');
+
+    if ($oldLat !== $newLat || $oldLng !== $newLng) {
+        session()->forget(['nearby_places', 'nearby_cached_at']);
+    }
+
+    session([
+        'last_lat' => (float) $request->latitude,
+        'last_lng' => (float) $request->longitude,
+    ]);
+    return response()->json(['status' => 'ok']);
+})->middleware('auth')->name('location.save');
 
 // Admin routes
 Route::middleware(['auth', 'is_admin'])->prefix('admin')->name('admin.')->group(function () {

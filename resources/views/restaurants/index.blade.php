@@ -577,6 +577,7 @@ function locationPicker() {
                     this.lng   = position.coords.longitude.toString();
                     this.label = 'Current location detected';
                     this.detecting = false;
+                    this.saveLocation(this.lat, this.lng);
                 },
                 () => {
                     this.detecting = false;
@@ -645,6 +646,18 @@ function locationPicker() {
 
         confirmMapLocation() {
             this.showManual = false;
+            this.saveLocation(this.lat, this.lng);
+        },
+
+        async saveLocation(lat, lng) {
+            await fetch('{{ route("location.save") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                },
+                body: JSON.stringify({ latitude: lat, longitude: lng }),
+            });
         },
     }
 }
