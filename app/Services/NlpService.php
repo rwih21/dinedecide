@@ -61,11 +61,12 @@ class NlpService
 
         IMPORTANT: Each field has strict rules.
 
-        "FoodType": Extract the specific food, dish, or cuisine the user is asking for. Return it exactly as they typed it. 
-            - Example: "warm soup" -> "warm soup"
-            - Example: "spicy noodles" -> "spicy noodles"
-            - "family dinner" / "date night" is NOT a food type, return "any"
-            - If no specific food is mentioned, return "any".
+        "FoodType": Extract ANY food, drink, or cuisine mentioned.
+        - Translate Indonesian to English: "teh" = "tea", "kopi" = "coffee", 
+        "nasi" = "rice/indonesian", "mie" = "noodles"
+        - If the user mentions a drink, that IS a food type. "minum teh" = "tea"
+        - Only return "any" if absolutely nothing food-related is mentioned
+        - When unsure, make your best guess rather than returning "any"
 
         "MaxPrice": Exact integer in IDR based on the user's maximum budget.
             - "under 50k" or "50rb" = 50000

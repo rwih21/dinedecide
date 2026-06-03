@@ -33,6 +33,7 @@ class GooglePlacesService
 
         $categoryMap = [
             'coffee'     => 'coffee shop',
+            'tea'        => 'tea shop',
             'ramen'      => 'ramen',
             'sushi'      => 'sushi restaurant',
             'burger'     => 'burger',
