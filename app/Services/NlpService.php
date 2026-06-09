@@ -14,7 +14,7 @@ class NlpService
     public function __construct()
     {
         $this->client = new Client([
-            'base_uri' => 'http://127.0.0.1:11434/v1/',
+            'base_uri' => env('OLLAMA_BASE_URL', 'http://127.0.0.1:11434/v1/'),
             'timeout'  => 60.0,
             'headers'  => [
                 'Authorization' => 'Bearer ollama',
