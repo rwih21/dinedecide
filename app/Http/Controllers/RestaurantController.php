@@ -196,18 +196,18 @@ class RestaurantController extends Controller
         // --- Warm the browse cache as a side effect ---
         // Only if the cache is missing or stale — avoids an extra API call
         // when the cache is already fresh
-        if (!session('nearby_cached_at') ||
-            now()->diffInSeconds(session('nearby_cached_at')) >= 600
-        ) {
-            $allNearby = $this->places->getNearbyRestaurants('any', 3000, $userLat, $userLng, 0);
-            $allNearby = $this->places->applyFoodMatch($allNearby, 'any');
-            $allNearby = $this->places->applyTimeWarning($allNearby, 'now');
-            usort($allNearby, fn($a, $b) => $a['distance'] <=> $b['distance']);
-            session([
-                'nearby_places'    => $allNearby,
-                'nearby_cached_at' => now(),
-            ]);
-        }
+        // if (!session('nearby_cached_at') ||
+        //     now()->diffInSeconds(session('nearby_cached_at')) >= 600
+        // ) {
+        //     $allNearby = $this->places->getNearbyRestaurants('any', 3000, $userLat, $userLng, 0);
+        //     $allNearby = $this->places->applyFoodMatch($allNearby, 'any');
+        //     $allNearby = $this->places->applyTimeWarning($allNearby, 'now');
+        //     usort($allNearby, fn($a, $b) => $a['distance'] <=> $b['distance']);
+        //     session([
+        //         'nearby_places'    => $allNearby,
+        //         'nearby_cached_at' => now(),
+        //     ]);
+        // }
 
         // --- Save ---
         $search = SearchHistory::create([

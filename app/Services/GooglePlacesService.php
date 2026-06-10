@@ -26,63 +26,66 @@ class GooglePlacesService
             return [];
         }
 
-        // $query = 'Restaurant';
-        // if ($foodType !== 'any') {
-        //     $query = $foodType . ' restaurant';
-        // }
+        $bucketLat = round($userLat, 2);
+        $bucketLng = round($userLng, 2);
+        $cacheKey  = "places_{$foodType}_{$bucketLat}_{$bucketLng}_{$maxDistance}";
 
-        $categoryMap = [
-            'coffee'     => 'coffee shop',
-            'tea'        => 'tea shop',
-            'ramen'      => 'ramen',
-            'sushi'      => 'sushi restaurant',
-            'burger'     => 'burger',
-            'pizza'      => 'pizza',
-            'indonesian' => 'Indonesian food',
-            'chicken'    => 'ayam',
-        ];
+        $places = cache()->get($cacheKey);
 
-        $query = $categoryMap[$foodType] 
-            ?? ($foodType !== 'any' ? $foodType : 'restaurant');
+        if ($places === null) {
+            $categoryMap = [
+                'coffee'     => 'coffee shop',
+                'tea'        => 'tea shop',
+                'ramen'      => 'ramen',
+                'sushi'      => 'sushi restaurant',
+                'burger'     => 'burger',
+                'pizza'      => 'pizza',
+                'indonesian' => 'Indonesian food',
+                'chicken'    => 'ayam',
+            ];
 
-        $response = Http::timeout(20)
-        ->connectTimeout(10)
-        ->retry(3, 200)
-        ->withHeaders([
-            'X-Goog-Api-Key' => $this->apiKey,
-            'X-Goog-FieldMask' => 'places.id,places.displayName,places.priceLevel,places.priceRange,places.rating,places.userRatingCount,places.photos,places.types,places.location,places.formattedAddress,places.regularOpeningHours',
-        ])->post('https://places.googleapis.com/v1/places:searchText', [
-            'textQuery' => $query,
-            'locationBias' => [
-                'circle' => [
-                    'center' => ['latitude' => $userLat, 'longitude' => $userLng],
-                    'radius' => (float) $maxDistance
-                ]
-            ],
-            'maxResultCount' => 20,
-        ]);
+            $query = $categoryMap[$foodType]
+                ?? ($foodType !== 'any' ? $foodType : 'restaurant');
 
-        // if ($response->failed()) {
-        //     Log::error('Google Places API Error: ' . $response->body());
-        //     return [];
-        // }
+            $response = Http::timeout(20)
+                ->connectTimeout(10)
+                ->retry(3, 200)
+                ->withHeaders([
+                    'X-Goog-Api-Key'   => $this->apiKey,
+                    'X-Goog-FieldMask' => 'places.id,places.displayName,places.priceLevel,places.priceRange,places.rating,places.userRatingCount,places.photos,places.types,places.location,places.formattedAddress,places.regularOpeningHours',
+                ])->post('https://places.googleapis.com/v1/places:searchText', [
+                    'textQuery'      => $query,
+                    'locationBias'   => [
+                        'circle' => [
+                            'center' => ['latitude' => $userLat, 'longitude' => $userLng],
+                            'radius' => (float) $maxDistance,
+                        ],
+                    ],
+                    'maxResultCount' => 20,
+                ]);
 
-        if ($response->failed()) {
-            Log::error('Google Places API Error', [
-                'status' => $response->status(),
-                'body' => $response->body(),
-                'query' => $query,
-            ]);
+            if ($response->failed()) {
+                Log::error('Google Places API Error', [
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                    'query'  => $query,
+                ]);
+                return [];
+            }
 
-            return []; // to avoid 500 error
+            $places = $response->json('places') ?? [];
+
+            // Only cache if we got actual results
+            if (!empty($places)) {
+                cache()->put($cacheKey, $places, now()->addMinutes(10));
+            }
+
+            Log::info('Google Places API called for "' . $query . '": ' .
+                implode(', ', array_column(array_column($places, 'displayName'), 'text'))
+            );
+        } else {
+            Log::info('Google Places cache hit for key: ' . $cacheKey);
         }
-
-        $places = $response->json('places') ?? [];
-
-        // log
-        Log::info('Raw Google results for "' . $query . '": ' . 
-            implode(', ', array_column(array_column($places, 'displayName'), 'text'))
-        );
 
         $mapped = $this->mapResults($places, $userLat, $userLng);
 
@@ -106,10 +109,6 @@ class GooglePlacesService
                 ? "https://places.googleapis.com/v1/{$photoRef}/media?maxWidthPx=400&key={$this->apiKey}"
                 : null;
 
-            // --- FIX: build priceDisplay correctly ---
-            // priceRange takes priority (exact IDR range from Google)
-            // priceLevel fallback maps the enum to $/$$/$$$/$$$$
-            // Never pass the float from getExactPriceForSaw() into str_repeat()
             $priceDisplay = 'Price N/A';
             if (!empty($place['priceRange'])) {
                 $start        = ($place['priceRange']['startPrice']['units'] ?? 0) / 1000;
@@ -188,9 +187,9 @@ class GooglePlacesService
         $earthRadius = 6371000;
         $dLat = deg2rad($lat2 - $lat1);
         $dLng = deg2rad($lng2 - $lng1);
-        $a    = sin($dLat/2) * sin($dLat/2)
+        $a    = sin($dLat / 2) * sin($dLat / 2)
               + cos(deg2rad($lat1)) * cos(deg2rad($lat2))
-              * sin($dLng/2) * sin($dLng/2);
+              * sin($dLng / 2) * sin($dLng / 2);
         return round($earthRadius * 2 * atan2(sqrt($a), sqrt(1 - $a)), 2);
     }
 
@@ -233,51 +232,51 @@ class GooglePlacesService
         $name = strtolower($name);
 
         $keywords = [
-            'ramen'         => 'ramen',
-            'mie'           => 'ramen',
-            'noodle'        => 'ramen',
-            'pho'           => 'ramen',
-            'sushi'         => 'sushi',
-            'sashimi'       => 'sushi',
-            'japanese'      => 'japanese',
-            'jepang'        => 'japanese',
-            'yoshinoya'     => 'japanese',
-            'hokben'        => 'japanese',
-            'pepper lunch'  => 'japanese',
-            'shaburi'       => 'japanese',
-            'yakiniku'      => 'japanese',
-            'ichiban'       => 'japanese',
-            'bakso'         => 'indonesian',
-            'nasi'          => 'indonesian',
-            'soto'          => 'indonesian',
-            'padang'        => 'indonesian',
-            'warteg'        => 'indonesian',
-            'warung'        => 'indonesian',
-            'masakan'       => 'indonesian',
-            'indonesia'     => 'indonesian',
-            'taman santap'  => 'indonesian',
+            'ramen'           => 'ramen',
+            'mie'             => 'ramen',
+            'noodle'          => 'ramen',
+            'pho'             => 'ramen',
+            'sushi'           => 'sushi',
+            'sashimi'         => 'sushi',
+            'japanese'        => 'japanese',
+            'jepang'          => 'japanese',
+            'yoshinoya'       => 'japanese',
+            'hokben'          => 'japanese',
+            'pepper lunch'    => 'japanese',
+            'shaburi'         => 'japanese',
+            'yakiniku'        => 'japanese',
+            'ichiban'         => 'japanese',
+            'bakso'           => 'indonesian',
+            'nasi'            => 'indonesian',
+            'soto'            => 'indonesian',
+            'padang'          => 'indonesian',
+            'warteg'          => 'indonesian',
+            'warung'          => 'indonesian',
+            'masakan'         => 'indonesian',
+            'indonesia'       => 'indonesian',
+            'taman santap'    => 'indonesian',
             'bandar djakarta' => 'indonesian',
-            'omakyo'        => 'indonesian',
-            'burger'        => 'burger',
-            'mcdonald'      => 'burger',
-            'mcdonalds'     => 'burger',
-            'wendy'         => 'burger',
-            'smashburger'   => 'burger',
-            'pizza'         => 'pizza',
-            'chicken'       => 'chicken',
-            'rooster'       => 'chicken',
-            'ayam'          => 'chicken',
-            'kfc'           => 'chicken',
-            'nene'          => 'chicken',
-            'chick'         => 'chicken',
-            'coffee'        => 'coffee',
-            'kopi'          => 'coffee',
-            'cafe'          => 'coffee',
-            'starbucks'     => 'coffee',
-            'espresso'      => 'coffee',
-            'brew'          => 'coffee',
-            'fastfood'      => 'fastfood',
-            'fast food'     => 'fastfood',
+            'omakyo'          => 'indonesian',
+            'burger'          => 'burger',
+            'mcdonald'        => 'burger',
+            'mcdonalds'       => 'burger',
+            'wendy'           => 'burger',
+            'smashburger'     => 'burger',
+            'pizza'           => 'pizza',
+            'chicken'         => 'chicken',
+            'rooster'         => 'chicken',
+            'ayam'            => 'chicken',
+            'kfc'             => 'chicken',
+            'nene'            => 'chicken',
+            'chick'           => 'chicken',
+            'coffee'          => 'coffee',
+            'kopi'            => 'coffee',
+            'cafe'            => 'coffee',
+            'starbucks'       => 'coffee',
+            'espresso'        => 'coffee',
+            'brew'            => 'coffee',
+            'fastfood'        => 'fastfood',
+            'fast food'       => 'fastfood',
         ];
 
         $inferred = [];
@@ -292,23 +291,14 @@ class GooglePlacesService
 
     public function applyFoodMatch(array $candidates, string $foodType): array
     {
-        // If the user didn't specify a food, or if we explicitly searched Google 
-        // using this foodType, we inherently TRUST that Google returned valid matches.
-        // We give them all a baseline food_match of 1 so SAW doesn't delete them.
         return array_map(function ($r) use ($foodType) {
-            $r['food_match'] = 1; 
+            $r['food_match'] = 1;
 
-            // Optional: Give a slight SAW score BOOST (+0.5) if the Google category 
-            // strictly matches, just as an extra reward for perfect categorization.
             if ($foodType !== 'any') {
                 $direct  = in_array($foodType, $r['types']);
                 $partial = !$direct && collect($r['types'])->contains(
                     fn($t) => str_contains($t, $foodType) || str_contains($foodType, $t)
                 );
-                
-                // if ($direct || $partial) {
-                //     $r['food_match'] = 1.5; // Extra weight for exact categorical match
-                // }
             }
 
             return $r;
