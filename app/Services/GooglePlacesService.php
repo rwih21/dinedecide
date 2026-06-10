@@ -45,7 +45,10 @@ class GooglePlacesService
         $query = $categoryMap[$foodType] 
             ?? ($foodType !== 'any' ? $foodType : 'restaurant');
 
-        $response = Http::withHeaders([
+        $response = Http::timeout(20)
+        ->connectTimeout(10)
+        ->retry(3, 200)
+        ->withHeaders([
             'X-Goog-Api-Key' => $this->apiKey,
             'X-Goog-FieldMask' => 'places.id,places.displayName,places.priceLevel,places.priceRange,places.rating,places.userRatingCount,places.photos,places.types,places.location,places.formattedAddress,places.regularOpeningHours',
         ])->post('https://places.googleapis.com/v1/places:searchText', [
@@ -59,15 +62,25 @@ class GooglePlacesService
             'maxResultCount' => 20,
         ]);
 
+        // if ($response->failed()) {
+        //     Log::error('Google Places API Error: ' . $response->body());
+        //     return [];
+        // }
+
         if ($response->failed()) {
-            Log::error('Google Places API Error: ' . $response->body());
-            return [];
+            Log::error('Google Places API Error', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+                'query' => $query,
+            ]);
+
+            return []; // to avoid 500 error
         }
 
         $places = $response->json('places') ?? [];
 
         // log
-        \Log::info('Raw Google results for "' . $query . '": ' . 
+        Log::info('Raw Google results for "' . $query . '": ' . 
             implode(', ', array_column(array_column($places, 'displayName'), 'text'))
         );
 
