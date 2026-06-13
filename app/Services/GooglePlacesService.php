@@ -15,7 +15,7 @@ class GooglePlacesService
     }
 
     public function getNearbyRestaurants(
-        string $foodType,
+        string $foodSearch,
         float $maxDistance,
         float $userLat = -6.2233,
         float $userLng = 106.6491,
@@ -26,27 +26,19 @@ class GooglePlacesService
             return [];
         }
 
+        // Build the query Google actually receives
+        // If Ollama gave us a specific dish/food, use it directly so Google's
+        // NLP handles the semantic search. Fall back to "restaurant" if empty.
+        $query = !empty(trim($foodSearch)) ? trim($foodSearch) : 'restaurant';
+
         $bucketLat = round($userLat, 2);
         $bucketLng = round($userLng, 2);
-        $cacheKey  = "places_{$foodType}_{$bucketLat}_{$bucketLng}_{$maxDistance}";
+        // Cache key uses the raw query so "ayam geprek" and "chicken" are cached separately
+        $cacheKey  = 'places_' . md5($query) . "_{$bucketLat}_{$bucketLng}_{$maxDistance}";
 
         $places = cache()->get($cacheKey);
 
         if ($places === null) {
-            $categoryMap = [
-                'coffee'     => 'coffee shop',
-                'tea'        => 'tea shop',
-                'ramen'      => 'ramen',
-                'sushi'      => 'sushi restaurant',
-                'burger'     => 'burger',
-                'pizza'      => 'pizza',
-                'indonesian' => 'Indonesian food',
-                'chicken'    => 'ayam',
-            ];
-
-            $query = $categoryMap[$foodType]
-                ?? ($foodType !== 'any' ? $foodType : 'restaurant');
-
             $response = Http::timeout(20)
                 ->connectTimeout(10)
                 ->retry(3, 200)
@@ -75,7 +67,6 @@ class GooglePlacesService
 
             $places = $response->json('places') ?? [];
 
-            // Only cache if we got actual results
             if (!empty($places)) {
                 cache()->put($cacheKey, $places, now()->addMinutes(10));
             }
@@ -246,6 +237,8 @@ class GooglePlacesService
             'shaburi'         => 'japanese',
             'yakiniku'        => 'japanese',
             'ichiban'         => 'japanese',
+            'katsu'           => 'japanese',
+            'tonkatsu'        => 'japanese',
             'bakso'           => 'indonesian',
             'nasi'            => 'indonesian',
             'soto'            => 'indonesian',
@@ -254,6 +247,8 @@ class GooglePlacesService
             'warung'          => 'indonesian',
             'masakan'         => 'indonesian',
             'indonesia'       => 'indonesian',
+            'geprek'          => 'indonesian',
+            'penyet'          => 'indonesian',
             'taman santap'    => 'indonesian',
             'bandar djakarta' => 'indonesian',
             'omakyo'          => 'indonesian',
@@ -292,15 +287,9 @@ class GooglePlacesService
     public function applyFoodMatch(array $candidates, string $foodType): array
     {
         return array_map(function ($r) use ($foodType) {
+            // Since Google already searched for the right food, all results
+            // are considered relevant. food_match = 1 for everyone.
             $r['food_match'] = 1;
-
-            if ($foodType !== 'any') {
-                $direct  = in_array($foodType, $r['types']);
-                $partial = !$direct && collect($r['types'])->contains(
-                    fn($t) => str_contains($t, $foodType) || str_contains($foodType, $t)
-                );
-            }
-
             return $r;
         }, $candidates);
     }

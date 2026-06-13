@@ -25,6 +25,13 @@ class NlpService
 
     public function extractIntent(string $rawQuery): array
     {
+        $cacheKey = 'nlp_intent_' . md5(strtolower(trim($rawQuery)));
+
+        if ($cached = cache()->get($cacheKey)) {
+            Log::info('NLP cache hit for query: ' . $rawQuery);
+            return $cached;
+        }
+
         try {
             $response = $this->client->post('chat/completions', [
                 'json' => [
@@ -40,70 +47,91 @@ class NlpService
             $body    = json_decode($response->getBody()->getContents(), true);
             $content = $body['choices'][0]['message']['content'] ?? '';
 
-            // return $this->parseResponse($content);
             $result = $this->parseResponse($content);
-            Log::info('NLP intent extracted', $result); // add this
+            Log::info('NLP intent extracted', $result);
+
+            // Only cache if Ollama returned something meaningful
+            if ($result['FoodSearch'] !== '' || $result['MaxPrice'] !== 0) {
+                cache()->put($cacheKey, $result, now()->addHours(24));
+            }
+
             return $result;
 
         } catch (GuzzleException $e) {
             Log::error('NlpService API error: ' . $e->getMessage());
-            return $this->fallbackIntent();
+            return $this->fallbackIntent($rawQuery);
         }
     }
 
     private function systemPrompt(): string
     {
         return <<<PROMPT
-        CRITICAL RULE: "FoodType" must ONLY be a food or cuisine. Words like "family", "romantic", "casual", "date", "dinner", "lunch" are NEVER valid FoodType values — they belong in "Occasion" instead.
-        
-        You are a structured entity extractor for a restaurant recommendation app.
-        Extract the user's intent and return ONLY a valid JSON object — no markdown, no explanation, no extra text.
+You are a structured intent extractor for a restaurant recommendation app in Indonesia.
+Extract the user's intent and return ONLY a valid JSON object — no markdown, no explanation, no extra text.
 
-        IMPORTANT: Each field has strict rules.
+FIELD RULES:
 
-        "FoodType": Extract ANY food, drink, or cuisine mentioned.
-        - Translate Indonesian to English: "teh" = "tea", "kopi" = "coffee", 
-        "nasi" = "rice/indonesian", "mie" = "noodles"
-        - If the user mentions a drink, that IS a food type. "minum teh" = "tea"
-        - Only return "any" if absolutely nothing food-related is mentioned
-        - When unsure, make your best guess rather than returning "any"
+"FoodSearch": The exact food, dish, drink, or cuisine the user wants to find.
+  - Preserve the user's words as closely as possible. Do NOT translate or generalize.
+  - "chicken katsu" → "chicken katsu"
+  - "ayam geprek" → "ayam geprek"
+  - "ayam penyet pedas" → "ayam penyet"
+  - "kopi susu" → "kopi susu"
+  - "ramen hangat" → "ramen"
+  - "I want something to eat" → "" (empty string — no food specified)
+  - If nothing food-related is mentioned, return an empty string "".
 
-        "MaxPrice": Exact integer in IDR based on the user's maximum budget.
-            - "under 50k" or "50rb" = 50000
-            - "25k to 60k" = 60000 (extract the MAXIMUM they are willing to spend)
-            - "cheap" / "budget" = 30000
-            - "expensive" / "fine dining" = 300000
-            - not mentioned = 0
+"FoodType": A simplified category for internal scoring. Must be one of:
+  any, indonesian, chicken, ramen, sushi, japanese, burger, pizza, coffee, korean, seafood, chinese, steak, thai, fastfood
+  - "ayam geprek" → "chicken"
+  - "ayam penyet" → "chicken"
+  - "chicken katsu" → "chicken"
+  - "tonkatsu" → "japanese"
+  - "kopi susu" → "coffee"
+  - "nasi padang" → "indonesian"
+  - "pad thai" → "thai"
+  - "bibimbap" → "korean"
+  - If unsure, pick the closest category. Only use "any" if truly nothing food-related is mentioned.
 
-        "MaxDistance": in meters:
-            - nearby / dekat / near         = 1000
-            - walking distance              = 500
-            - a number in km                = that number * 1000
-            - not mentioned                 = 3000
+"MaxPrice": Maximum budget as an exact integer in IDR.
+  - "under 50k" / "50rb" → 50000
+  - "25k to 60k" → 60000 (use the higher number)
+  - "cheap" / "budget" / "murah" → 30000
+  - "expensive" / "fine dining" → 300000
+  - not mentioned → 0
 
-        "Occasion": The SOCIAL CONTEXT or PURPOSE of the meal. Must be one of:
-            family, romantic, formal, casual, any
+"MaxDistance": Search radius in meters.
+  - "nearby" / "dekat" / "near" → 1000
+  - "walking distance" → 500
+  - "2km" → 2000
+  - not mentioned → 3000
 
-        "VisitTime": WHEN they plan to visit. Must be one of:
-            now, morning, lunch, afternoon, evening, night
+"Occasion": Social context. Must be one of: family, romantic, formal, casual, any
+"VisitTime": When they plan to visit. Must be one of: now, morning, lunch, afternoon, evening, night
 
-        English examples:
-        Input: "I want warm soup and I am on a budget. Around 25k to 50k is ok"
-        Output: {"FoodType": "warm soup", "MaxPrice": 50000, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
+EXAMPLES:
 
-        Indonesian examples:
-        Input: "aku mau minum kopi deket sini"
-        Output: {"FoodType": "coffee", "MaxPrice": 0, "MaxDistance": 1000, "Occasion": "any", "VisitTime": "now"}
+Input: "I want chicken katsu under 50k"
+Output: {"FoodSearch": "chicken katsu", "FoodType": "chicken", "MaxPrice": 50000, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
 
-        Input: "cari nasi padang murah sekitar sini"
-        Output: {"FoodType": "indonesian", "MaxPrice": 30000, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
+Input: "ayam geprek deket sini"
+Output: {"FoodSearch": "ayam geprek", "FoodType": "chicken", "MaxPrice": 0, "MaxDistance": 1000, "Occasion": "any", "VisitTime": "now"}
 
-        Input: "pengen ramen hangat malem ini"
-        Output: {"FoodType": "ramen", "MaxPrice": 0, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "night"}
+Input: "pengen ramen hangat malem ini"
+Output: {"FoodSearch": "ramen", "FoodType": "ramen", "MaxPrice": 0, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "night"}
 
-        Return exactly this shape:
-        {"FoodType": "any", "MaxPrice": 0, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
-        PROMPT;
+Input: "cari nasi padang murah sekitar sini"
+Output: {"FoodSearch": "nasi padang", "FoodType": "indonesian", "MaxPrice": 30000, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
+
+Input: "aku mau minum kopi susu deket sini"
+Output: {"FoodSearch": "kopi susu", "FoodType": "coffee", "MaxPrice": 0, "MaxDistance": 1000, "Occasion": "any", "VisitTime": "now"}
+
+Input: "dinner romantis buat anniversary"
+Output: {"FoodSearch": "", "FoodType": "any", "MaxPrice": 0, "MaxDistance": 3000, "Occasion": "romantic", "VisitTime": "evening"}
+
+Return exactly this shape:
+{"FoodSearch": "", "FoodType": "any", "MaxPrice": 0, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
+PROMPT;
     }
 
     private function parseResponse(string $content): array
@@ -119,21 +147,22 @@ class NlpService
             return $this->fallbackIntent();
         }
 
-        // Removed the $validFoodTypes array entirely!
+        $validFoodTypes = ['any','indonesian','chicken','ramen','sushi','japanese','burger','pizza','coffee','korean','seafood','chinese','steak','thai','fastfood'];
         $validOccasions = ['family','romantic','formal','casual','any'];
         $validTimes     = ['now','morning','lunch','afternoon','evening','night'];
 
-        // Let the LLM string pass through untouched (just trimmed and lowercased)
-        $foodType = strtolower(trim($data['FoodType'] ?? 'any'));
-        $occasion = strtolower(trim($data['Occasion']  ?? 'any'));
-        $visitTime = strtolower(trim($data['VisitTime'] ?? 'now'));
+        $foodSearch = trim($data['FoodSearch'] ?? '');
+        $foodType   = strtolower(trim($data['FoodType']  ?? 'any'));
+        $occasion   = strtolower(trim($data['Occasion']  ?? 'any'));
+        $visitTime  = strtolower(trim($data['VisitTime'] ?? 'now'));
 
-        // Only enforce rigid validation on Occasion and VisitTime
-        if (!in_array($occasion, $validOccasions)) $occasion = 'any';
-        if (!in_array($visitTime, $validTimes))    $visitTime = 'now';
+        if (!in_array($foodType, $validFoodTypes))  $foodType  = 'any';
+        if (!in_array($occasion, $validOccasions))  $occasion  = 'any';
+        if (!in_array($visitTime, $validTimes))     $visitTime = 'now';
 
         return [
-            'FoodType'    => $foodType,
+            'FoodSearch'  => $foodSearch,   // passed directly to Google textQuery
+            'FoodType'    => $foodType,      // used for SAW food_match scoring only
             'MaxPrice'    => (int)   ($data['MaxPrice']    ?? 0),
             'MaxDistance' => (float) ($data['MaxDistance'] ?? 3000),
             'Occasion'    => $occasion,
@@ -141,9 +170,10 @@ class NlpService
         ];
     }
 
-    private function fallbackIntent(): array
+    private function fallbackIntent(string $rawQuery = ''): array
     {
         return [
+            'FoodSearch'  => $rawQuery, // fall back to full raw query so Google still gets something
             'FoodType'    => 'any',
             'MaxPrice'    => 0,
             'MaxDistance' => 3000.0,
