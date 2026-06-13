@@ -69,71 +69,47 @@
             @endif
 
             {{-- Promoted Places Carousel --}}
-            @if(isset($promotedPlaces) && $promotedPlaces->isNotEmpty())
-            <div class="mb-6"
-                 x-data="{ 
-                    active: 0, 
-                    count: {{ $promotedPlaces->count() }},
-                    init() {
-                        if (this.count > 1) {
-                            setInterval(() => {
-                                this.active = (this.active + 1) % this.count;
-                            }, 5000);
-                        }
-                    }
-                 }">
-                <p class="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-3">Sponsored</p>
-                
-                <div class="relative rounded-2xl overflow-hidden bg-white"
-                     style="border: 1.5px solid #E5E5E5; box-shadow: 0 2px 12px rgba(0,0,0,0.04); min-height: 180px;">
-                    
-                    @foreach($promotedPlaces as $index => $place)
-                    <div x-show="active === {{ $index }}"
-                         x-transition:enter="transition ease-in-out duration-1000"
-                         x-transition:enter-start="opacity-0"
-                         x-transition:enter-end="opacity-100"
-                         x-transition:leave="transition ease-in-out duration-1000"
-                         x-transition:leave-start="opacity-100"
-                         x-transition:leave-end="opacity-0"
-                         class="absolute inset-0 p-4 sm:p-5 flex flex-col sm:flex-row gap-4 w-full h-full bg-white"
-                         {{ $index === 0 ? '' : 'x-cloak' }}>
-                         
-                        <span class="absolute z-10 top-3 right-3 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
-                              style="background:#F5F5F4; color:#A3A3A3; border:1px solid #E5E5E5">
-                            Sponsored
-                        </span>
+            @if(isset($promotedPlaces) && $promotedPlaces !== null)
+            <div class="mb-6">
+                <div class="bg-white rounded-2xl p-4 flex gap-4 relative"
+                    style="border:1.5px solid #E5E5E5; box-shadow: 0 2px 12px rgba(0,0,0,0.04)">
 
-                        <div class="relative shrink-0 w-full sm:w-32 h-36 sm:h-auto rounded-xl overflow-hidden bg-neutral-100">
-                            <img src="{{ $place->photo_url }}" alt="{{ $place->name }}" class="absolute inset-0 w-full h-full object-cover">
+                    <span class="absolute top-3 right-3 text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                        style="background:#F5F5F4; color:#A3A3A3; border:1px solid #E7E7E7">
+                        Sponsored
+                    </span>
+
+                    <img src="{{ $promotedPlaces->photo_url }}"
+                        alt="{{ $promotedPlaces->name }}"
+                        class="w-20 h-20 rounded-xl object-cover shrink-0 bg-neutral-100">
+
+                    <div class="flex-1 min-w-0">
+                        <h3 class="font-bold text-neutral-800 pr-16 truncate">{{ $promotedPlaces->name }}</h3>
+
+                        @if($promotedPlaces->description)
+                        <p class="text-xs text-neutral-400 mt-0.5 line-clamp-2">{{ $promotedPlaces->description }}</p>
+                        @endif
+
+                        <div class="flex flex-wrap items-center gap-2 mt-2">
+                            <span class="text-xs font-medium text-emerald-600">{{ $promotedPlaces->price_display }}</span>
+                            @if($promotedPlaces->address)
+                            <span class="text-xs text-neutral-400 truncate">📍 {{ $promotedPlaces->address }}</span>
+                            @endif
                         </div>
 
-                        <div class="flex-1">
-                            <h3 class="text-lg font-bold text-neutral-900 leading-tight pr-16">{{ $place->name }}</h3>
-                            @if($place->description)
-                            <p class="text-sm text-neutral-500 mt-1 leading-relaxed">{{ $place->description }}</p>
+                        <div class="flex gap-2 mt-3">
+                            @if($promotedPlaces->gmaps_url)
+                            <a href="{{ $promotedPlaces->gmaps_url }}" target="_blank"
+                            class="text-[11px] font-semibold text-white px-3 py-1.5 rounded-lg"
+                            style="background:#059669">Directions</a>
                             @endif
-                            <div class="flex flex-wrap items-center gap-2 mt-3">
-                                <span class="text-xs font-medium text-emerald-600">💰 {{ $place->price_display }}</span>
-                                @if($place->address)
-                                <span class="text-xs text-neutral-400">📍 {{ $place->address }}</span>
-                                @endif
-                            </div>
-                            <div class="flex flex-wrap gap-1 mt-2">
-                                @foreach($place->food_types as $type)
-                                <span class="text-[10px] px-2 py-0.5 rounded-full capitalize font-medium" style="background:#F0F0EF; color:#525252">{{ $type }}</span>
-                                @endforeach
-                            </div>
-                            <div class="flex gap-2 mt-4">
-                                @if($place->gmaps_url)
-                                <a href="{{ $place->gmaps_url }}" target="_blank" class="text-xs font-semibold text-white px-4 py-2 rounded-xl transition-colors" style="background:#059669">Directions</a>
-                                @endif
-                                @if($place->whatsapp)
-                                <a href="https://wa.me/{{ $place->whatsapp }}" target="_blank" class="text-xs font-semibold px-4 py-2 rounded-xl border transition-colors" style="color:#059669; border-color:#BBF7D0; background:#F0FDF4">WhatsApp</a>
-                                @endif
-                            </div>
+                            @if($promotedPlaces->whatsapp)
+                            <a href="https://wa.me/{{ $promotedPlaces->whatsapp }}" target="_blank"
+                            class="text-[11px] font-semibold px-3 py-1.5 rounded-lg border"
+                            style="color:#059669; border-color:#BBF7D0; background:#F0FDF4">WhatsApp</a>
+                            @endif
                         </div>
                     </div>
-                    @endforeach
                 </div>
             </div>
             @endif

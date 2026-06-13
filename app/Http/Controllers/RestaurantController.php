@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\PromotedPlace;
 use App\Models\RecommendationLog;
 use App\Models\SearchHistory;
 use App\Services\GooglePlacesService;
 use App\Services\NlpService;
+use App\Services\PromotionService;
 use App\Services\SawService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Services\PromotionService;
 
 class RestaurantController extends Controller
 {
@@ -39,7 +40,11 @@ class RestaurantController extends Controller
 
         $places = null;
 
-        $promotedPlaces = \App\Models\PromotedPlace::active()->latest()->get();
+        // $promotedPlaces = \App\Models\PromotedPlace::active()->latest()->first();
+        $allPromoted = PromotedPlace::active()->latest()->get();
+        $promotedPlaces = $allPromoted->isNotEmpty()
+            ? $allPromoted->get(now()->second % $allPromoted->count())
+            : null;
 
         // Use cached data if it exists and is fresh enough
         if ($cachedAt && now()->diffInSeconds($cachedAt) < $maxAgeSeconds) {
@@ -131,7 +136,11 @@ class RestaurantController extends Controller
         $intent['MaxBudget'] = $userBudget;
 
         // Fetch Promoted Place
-        $promotedPlaces = $this->promotions->pick($intent);
+        // $promotedPlaces = $this->promotions->pick($intent)->first();
+        $picked = $this->promotions->pick($intent);
+            $promotedPlaces = $picked->isNotEmpty()
+                ? $picked->get(now()->second % $picked->count())
+                : null;
 
         // --- Fetch candidates with dynamic location ---
         $candidates = $this->places->getNearbyRestaurants(
