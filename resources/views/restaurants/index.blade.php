@@ -139,7 +139,8 @@
             <div x-show="mode === 'filter'"
                  x-transition:enter="transition ease-out duration-200"
                  x-transition:enter-start="opacity-0 translate-x-2"
-                 x-transition:enter-end="opacity-100 translate-x-0">
+                 x-transition:enter-end="opacity-100 translate-x-0"
+                 class="flex-1 flex flex-col">
 
                 <form action="{{ route('restaurants.search') }}" method="POST" @submit="handleSubmit">
                     @csrf
@@ -206,10 +207,11 @@
                                     max="200000"
                                     step="5000"
                                     x-model.number="filter.price"
+                                    x-ref="priceSlider"
                                     class="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-                                    style="accent-color: #059669; background: linear-gradient(to right, #059669 0%, #059669 var(--pct, 0%), #E5E5E5 var(--pct, 0%), #E5E5E5 100%)"
-                                    @input="updateSliderFill($event)"
-                                    x-init="$nextTick(() => updateSliderFill({ target: $el }))"
+                                    style="accent-color: #059669;"
+                                    @input="updateSliderFill($el, $event.target.value)"
+                                    x-init="$nextTick(() => updateSliderFill($el, filter.price))"
                                 >
                             </div>
 
@@ -226,7 +228,7 @@
                             <div class="flex gap-2 mt-3">
                                 @foreach([0 => 'Any', 30000 => 'Under 30k', 50000 => 'Under 50k', 100000 => 'Under 100k'] as $val => $label)
                                 <button type="button"
-                                        @click="filter.price = {{ $val }}; updateSliderFill({ target: $el.closest('div.p-5').querySelector('input[type=range]') })"
+                                        @click="filter.price = {{ $val }}; updateSliderFill($refs.priceSlider, {{ $val }})"
                                         class="flex-1 text-[10px] font-semibold py-1.5 rounded-lg border transition-all duration-150"
                                         :style="filter.price === {{ $val }}
                                             ? 'background:#059669; color:white; border-color:#059669'
@@ -433,13 +435,10 @@ function searchForm() {
             '> Ranking results...',
         ],
 
-        updateSliderFill(e) {
-            const el  = e.target;
+        updateSliderFill(el, val) {
             const min = parseFloat(el.min) || 0;
             const max = parseFloat(el.max) || 200000;
-            const val = parseFloat(el.value) || 0;
             const pct = ((val - min) / (max - min)) * 100;
-            el.style.setProperty('--pct', pct + '%');
             el.style.background = `linear-gradient(to right, #059669 0%, #059669 ${pct}%, #E5E5E5 ${pct}%, #E5E5E5 100%)`;
         },
 
