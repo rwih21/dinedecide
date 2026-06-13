@@ -9,7 +9,7 @@
              style="background:radial-gradient(circle, #F59E0B, transparent 70%)"></div>
     </div>
 
-    <div class="relative w-full max-w-md" x-data="searchForm()" x-cloak>
+    <div class="relative w-full max-w-md flex flex-col min-h-screen py-8" x-data="searchForm()" x-cloak>
 
         {{-- INPUT SCREEN --}}
         <div x-show="screen === 'input'"
@@ -30,91 +30,45 @@
             </div>
 
             {{-- Location Selector --}}
-            <div class="mb-6 fade-up-delay-2" x-data="locationPicker()">
-                <input type="hidden" id="global-latitude"  x-model="lat">
+            {{-- Location Trigger Pill --}}
+            <div class="mb-6 fade-up-delay-2 flex justify-center" x-data="locationPicker()">
+                <input type="hidden" id="global-latitude" x-model="lat">
                 <input type="hidden" id="global-longitude" x-model="lng">
 
-                <div class="bg-white rounded-2xl p-4"
-                     style="box-shadow:0 4px 24px rgba(0,0,0,0.08); border:1.5px solid #F0F0EF">
+                <button type="button" 
+                        @click="openMap()"
+                        class="inline-flex items-center gap-2 bg-white px-5 py-2.5 rounded-full shadow-sm border border-neutral-200 text-xs font-semibold text-neutral-700 active:scale-95 transition-all">
+                    <span>📍</span>
+                    <span class="max-w-[180px] truncate" x-text="label"></span>
+                    <svg class="h-3 w-3 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
 
-                    <p class="font-bold uppercase tracking-widest mb-3" style="font-size:10px; color:#A3A3A3">
-                        📍 Your Location
-                    </p>
-
-                    <div class="flex items-center justify-between gap-3">
-                        <div class="flex-1">
-                            <p class="text-sm font-medium" style="color:#1A1A1A" x-text="label"></p>
-                            <p class="text-xs font-mono mt-0.5" style="color:#A3A3A3"
-                               x-show="lat && lng"
-                               x-text="`${parseFloat(lat).toFixed(4)}, ${parseFloat(lng).toFixed(4)}`">
-                            </p>
-                            <p class="text-xs mt-0.5" style="color:#EF4444"
-                               x-show="error" x-text="error">
-                            </p>
-                        </div>
-                        <button type="button"
-                                @click="detectLocation()"
-                                :disabled="detecting"
-                                class="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl transition-all duration-200 active:scale-95"
-                                style="background:#F0FDF4; color:#059669; border:1px solid #BBF7D0">
-                            <span x-show="!detecting">📡 Detect</span>
-                            <span x-show="detecting">Detecting...</span>
-                        </button>
-                    </div>
-
-                    <div class="flex items-center gap-2 my-3">
-                        <div class="flex-1 h-px" style="background:#F0F0EF"></div>
-                        <p class="text-xs" style="color:#A3A3A3">or set manually</p>
-                        <div class="flex-1 h-px" style="background:#F0F0EF"></div>
-                    </div>
-
-                    <div x-show="!showManual">
-                        <button type="button"
-                                @click="openMap()"
-                                class="w-full text-xs font-medium py-2 rounded-xl border transition-colors"
-                                style="color:#525252; border-color:#E5E5E5">
-                            🔍 Set a different location
-                        </button>
-                    </div>
-
-                    <div x-show="showManual" class="space-y-2">
-                        {{-- Search bar --}}
-                        <input 
-                            type="text"
-                            id="map-search-input"
-                            placeholder="e.g. Hotel Tentrem Semarang"
-                            class="w-full text-sm px-3 py-2 rounded-xl border focus:outline-none"
-                            style="border-color:#E5E5E5; color:#1A1A1A">
+                <!-- Modal Overlay -->
+                <template x-teleport="body">
+                    <div x-show="showManual" 
+                        x-cloak
+                        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+                        x-transition:enter="transition ease-out duration-300"
+                        x-transition:enter-start="opacity-0"
+                        x-transition:enter-end="opacity-100">
                         
-                        {{-- Map container --}}
-                        <div 
-                            id="location-map" 
-                            style="width:100%; height:250px; border-radius:12px; border:1px solid #E5E5E5; overflow:hidden">
-                        </div>
+                        <div class="absolute inset-0 bg-neutral-900/20 backdrop-blur-sm" @click="showManual = false"></div>
+                        
+                        <div class="bg-white rounded-3xl p-6 w-full max-w-sm relative z-10 shadow-2xl">
+                            <h3 class="font-bold text-lg mb-4">Set Location</h3>
+                            
+                            <input type="text" id="map-search-input" placeholder="Search area..." 
+                                class="w-full text-sm px-4 py-3 rounded-xl border border-neutral-200 mb-3 focus:ring-0 focus:border-emerald-500">
+                            
+                            <div id="location-map" class="w-full h-64 rounded-2xl border border-neutral-100 overflow-hidden mb-4"></div>
 
-                        {{-- Coordinates feedback --}}
-                        <p class="text-[10px] font-mono text-neutral-400" 
-                        x-show="lat && lng"
-                        x-text="`Pin at: ${parseFloat(lat).toFixed(5)}, ${parseFloat(lng).toFixed(5)}`">
-                        </p>
-
-                        {{-- Actions --}}
-                        <div class="flex gap-2">
-                            <button type="button"
-                                    @click="confirmMapLocation()"
-                                    class="flex-1 text-xs font-semibold py-2 rounded-xl text-white transition-all active:scale-95"
-                                    style="background:#059669">
-                                Confirm location
-                            </button>
-                            <button type="button"
-                                    @click="showManual = false"
-                                    class="text-xs px-3 py-2 rounded-xl border"
-                                    style="color:#525252; border-color:#E5E5E5">
-                                Cancel
-                            </button>
+                            <div class="flex gap-2">
+                                <button @click="confirmMapLocation()" class="flex-1 py-3 bg-emerald-600 text-white font-semibold rounded-xl text-sm">Confirm</button>
+                                <button @click="showManual = false" class="px-5 py-3 bg-neutral-100 text-neutral-600 font-semibold rounded-xl text-sm">Cancel</button>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </template>
             </div>
 
             {{-- Mode toggle --}}
@@ -137,11 +91,12 @@
                 </button>
             </div>
 
-            {{-- MODE A: NLP --}}
+            {{-- NLP Mode --}}
             <div x-show="mode === 'nlp'"
                  x-transition:enter="transition ease-out duration-200"
                  x-transition:enter-start="opacity-0 translate-x-2"
-                 x-transition:enter-end="opacity-100 translate-x-0">
+                 x-transition:enter-end="opacity-100 translate-x-0"
+                 class="flex-1 flex flex-col">
 
                 <form action="{{ route('restaurants.search') }}" method="POST" @submit="handleSubmit">
                     @csrf
@@ -149,10 +104,12 @@
                     <input type="hidden" name="latitude"  id="nlp-lat">
                     <input type="hidden" name="longitude" id="nlp-lng">
 
-                    <div class="rounded-2xl transition-all duration-200"
+                    {{-- Your ORIGINAL Wrapper Styling --}}
+                    <div class="relative rounded-2xl transition-all duration-200"
                          style="box-shadow: 0 4px 24px rgba(0,0,0,0.08); border: 1.5px solid #F0F0EF"
                          :style="focused ? 'border-color:#059669' : ''">
 
+                        {{-- Your ORIGINAL Input Styling (Restored bg-white, borders, and default shadow-sm) --}}
                         <input
                             type="text"
                             name="query"
@@ -163,36 +120,22 @@
                             style="color:#1A1A1A"
                         />
 
-                        @error('query')
-                            <p class="text-xs mt-1" style="color:#EF4444">{{ $message }}</p>
-                        @enderror
-
-                        {{-- Browse nearby link --}}
-                        <p class="mt-6 text-center text-xs" style="color:#A3A3A3">
-                            Not sure what you want?
-                            <a href="{{ route('restaurants.browse') }}"
-                            class="font-semibold underline underline-offset-2 transition-colors hover:opacity-70"
-                            style="color:#059669">
-                                Browse all nearby places →
-                            </a>
-                        </p>
-
-                        <div class="flex items-center justify-between pt-3">
-                            <p class="text-xs" style="color:#D4D4D4"></p>
-                            <button type="submit"
-                                    class="flex items-center gap-2 text-sm font-semibold text-white px-5 py-2.5 rounded-xl transition-all duration-200 active:scale-95"
-                                    style="background:#059669">
-                                Find places
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
-                                </svg>
-                            </button>
-                        </div>
+                        {{-- Embedded Submit Button (with added drop shadow to stand out) --}}
+                        <button type="submit"
+                                class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 rounded-xl transition-transform active:scale-95 shadow-md"
+                                style="background:#059669; color:white">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 transform rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19V5m-7 7l7-7 7 7" />
+                            </svg>
+                        </button>
                     </div>
+
+                    @error('query')
+                        <p class="text-xs mt-2 text-center" style="color:#EF4444">{{ $message }}</p>
+                    @enderror
                 </form>
             </div>
-
-            {{-- MODE B: Filter --}}
+            {{-- Filter mode --}}
             <div x-show="mode === 'filter'"
                  x-transition:enter="transition ease-out duration-200"
                  x-transition:enter-start="opacity-0 translate-x-2"
@@ -370,6 +313,15 @@
             </div>
             @endif
 
+        </div>
+
+       
+        <div class="mt-6 pt-5 border-t border-neutral-100 text-center">
+            <a href="{{ route('restaurants.browse') }}"
+                class="inline-flex items-center gap-1.5 text-sm font-semibold text-neutral-400 hover:text-emerald-600 transition-colors">
+                Just show me everything nearby
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </a>
         </div>
 
         {{-- PROCESSING SCREEN --}}
@@ -646,6 +598,7 @@ function locationPicker() {
 
         confirmMapLocation() {
             this.showManual = false;
+            this.label = 'Custom pin location';
             this.saveLocation(this.lat, this.lng);
         },
 

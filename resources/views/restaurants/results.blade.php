@@ -1,11 +1,29 @@
 <x-app-layout>
-    <div class="min-h-screen px-4 py-10" style="background:#F9F9F8">
+    {{-- 1. THE SINGLE MAIN WRAPPER --}}
+    {{-- All Alpine state lives here so both the top button and bottom sticky bar can talk to each other --}}
+    <div x-data="{ 
+        showSticky: false,
+        initObserver() {
+            this.$nextTick(() => {
+                let observer = new IntersectionObserver((entries) => {
+                    this.showSticky = !entries[0].isIntersecting;
+                }, { threshold: 0 }); 
+                
+                if (this.$refs.topButton) {
+                    observer.observe(this.$refs.topButton);
+                }
+            });
+        }
+    }" 
+    x-init="initObserver()"
+    class="min-h-screen px-4 pt-10 pb-[100px] relative" style="background:#F9F9F8">
+        
         <div class="max-w-2xl mx-auto">
 
             {{-- Back + query header --}}
             <div class="mb-8">
-                <a href="{{ route('restaurants.index') }}"
-                   class="inline-flex items-center gap-2 text-sm font-medium text-neutral-400 hover:text-emerald-600 transition-colors">
+                <a x-ref="topButton" href="{{ route('restaurants.index') }}"
+                   class="inline-flex items-center gap-2 text-sm font-medium text-neutral-500 hover:text-emerald-600 transition-colors bg-white px-4 py-2 rounded-xl border border-neutral-200 shadow-sm w-fit">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                     New search
                 </a>
@@ -60,7 +78,7 @@
                         if (this.count > 1) {
                             setInterval(() => {
                                 this.active = (this.active + 1) % this.count;
-                            }, 5000); // 5 seconds per fade
+                            }, 5000);
                         }
                     }
                  }">
@@ -80,63 +98,37 @@
                          class="absolute inset-0 p-4 sm:p-5 flex flex-col sm:flex-row gap-4 w-full h-full bg-white"
                          {{ $index === 0 ? '' : 'x-cloak' }}>
                          
-                        {{-- Sponsored badge --}}
                         <span class="absolute z-10 top-3 right-3 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
                               style="background:#F5F5F4; color:#A3A3A3; border:1px solid #E5E5E5">
                             Sponsored
                         </span>
 
                         <div class="relative shrink-0 w-full sm:w-32 h-36 sm:h-auto rounded-xl overflow-hidden bg-neutral-100">
-                            <img src="{{ $place->photo_url }}"
-                                 alt="{{ $place->name }}"
-                                 class="absolute inset-0 w-full h-full object-cover">
+                            <img src="{{ $place->photo_url }}" alt="{{ $place->name }}" class="absolute inset-0 w-full h-full object-cover">
                         </div>
 
                         <div class="flex-1">
-                            <h3 class="text-lg font-bold text-neutral-900 leading-tight pr-16">
-                                {{ $place->name }}
-                            </h3>
-
+                            <h3 class="text-lg font-bold text-neutral-900 leading-tight pr-16">{{ $place->name }}</h3>
                             @if($place->description)
-                            <p class="text-sm text-neutral-500 mt-1 leading-relaxed">
-                                {{ $place->description }}
-                            </p>
+                            <p class="text-sm text-neutral-500 mt-1 leading-relaxed">{{ $place->description }}</p>
                             @endif
-
                             <div class="flex flex-wrap items-center gap-2 mt-3">
-                                <span class="text-xs font-medium text-emerald-600">
-                                    💰 {{ $place->price_display }}
-                                </span>
+                                <span class="text-xs font-medium text-emerald-600">💰 {{ $place->price_display }}</span>
                                 @if($place->address)
-                                <span class="text-xs text-neutral-400">
-                                    📍 {{ $place->address }}
-                                </span>
+                                <span class="text-xs text-neutral-400">📍 {{ $place->address }}</span>
                                 @endif
                             </div>
-
                             <div class="flex flex-wrap gap-1 mt-2">
                                 @foreach($place->food_types as $type)
-                                <span class="text-[10px] px-2 py-0.5 rounded-full capitalize font-medium"
-                                      style="background:#F0F0EF; color:#525252">
-                                    {{ $type }}
-                                </span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full capitalize font-medium" style="background:#F0F0EF; color:#525252">{{ $type }}</span>
                                 @endforeach
                             </div>
-
                             <div class="flex gap-2 mt-4">
                                 @if($place->gmaps_url)
-                                <a href="{{ $place->gmaps_url }}" target="_blank"
-                                   class="text-xs font-semibold text-white px-4 py-2 rounded-xl transition-colors"
-                                   style="background:#059669">
-                                    Directions
-                                </a>
+                                <a href="{{ $place->gmaps_url }}" target="_blank" class="text-xs font-semibold text-white px-4 py-2 rounded-xl transition-colors" style="background:#059669">Directions</a>
                                 @endif
                                 @if($place->whatsapp)
-                                <a href="https://wa.me/{{ $place->whatsapp }}" target="_blank"
-                                   class="text-xs font-semibold px-4 py-2 rounded-xl border transition-colors"
-                                   style="color:#059669; border-color:#BBF7D0; background:#F0FDF4">
-                                    WhatsApp
-                                </a>
+                                <a href="https://wa.me/{{ $place->whatsapp }}" target="_blank" class="text-xs font-semibold px-4 py-2 rounded-xl border transition-colors" style="color:#059669; border-color:#BBF7D0; background:#F0FDF4">WhatsApp</a>
                                 @endif
                             </div>
                         </div>
@@ -170,12 +162,9 @@
                                     <span class="flex items-center gap-1 text-sm font-medium text-neutral-700 bg-neutral-100 px-2.5 py-1 rounded-lg">⭐ {{ $topPick['rating'] }}</span>
                                     <span class="text-sm font-medium text-neutral-500">📍 {{ number_format($topPick['distance'], 0) }}m</span>
                                     <span class="text-sm font-medium text-neutral-400">•</span>
-                                    
-                                    {{-- Replaced the str_repeat with the safe price_display string --}}
                                     <span class="text-sm font-medium text-emerald-600">{{ $topPick['price_display'] }}</span>
                                 </div>
 
-                                {{-- Render the Smart Pricing Feedback! --}}
                                 @if(!empty($topPick['price_comment']))
                                 <div class="mt-3 inline-flex">
                                     <span class="text-xs px-3 py-1 rounded-lg font-bold border 
@@ -214,34 +203,57 @@
                             <span x-text="showMath ? 'Hide' : 'View'"></span>
                         </button>
 
-                        <div x-show="showMath" x-collapse.duration.300ms class="mt-4">
-                            @php $b = $topPick['criteria_breakdown']; @endphp
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                <div class="bg-neutral-50 rounded-xl p-3 border border-neutral-100">
-                                    <p class="text-[10px] text-neutral-400 uppercase font-bold mb-1">Distance</p>
-                                    <p class="text-sm font-mono font-bold text-neutral-700">{{ number_format($b['C1_distance'] * 0.35, 4) }}</p>
+                        <div x-show="showMath" x-collapse.duration.300ms class="mt-4 p-4 bg-neutral-50 rounded-xl border border-neutral-100">
+                            @php 
+                                $b = $topPick['criteria_breakdown']; 
+                                $getW = function($val, $weight) { return min(100, max(0, ($val * $weight) * 100)); };
+                            @endphp
+                            <div class="space-y-3">
+                                <div>
+                                    <div class="flex justify-between text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">
+                                        <span>Distance</span>
+                                        <span>{{ number_format($b['C1_distance'] * 100, 0) }}% Match</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-neutral-200 rounded-full overflow-hidden">
+                                        <div class="h-full bg-emerald-500 rounded-full" style="width: {{ $getW($b['C1_distance'], 1) }}%"></div>
+                                    </div>
                                 </div>
-                                <div class="bg-neutral-50 rounded-xl p-3 border border-neutral-100">
-                                    <p class="text-[10px] text-neutral-400 uppercase font-bold mb-1">Food Match</p>
-                                    <p class="text-sm font-mono font-bold text-neutral-700">{{ number_format($b['C2_food_match'] * 0.30, 4) }}</p>
+
+                                <div>
+                                    <div class="flex justify-between text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">
+                                        <span>Craving Match</span>
+                                        <span>{{ number_format($b['C2_food_match'] * 100, 0) }}% Match</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-neutral-200 rounded-full overflow-hidden">
+                                        <div class="h-full bg-emerald-500 rounded-full" style="width: {{ $getW($b['C2_food_match'], 1) }}%"></div>
+                                    </div>
                                 </div>
-                                <div class="bg-neutral-50 rounded-xl p-3 border border-neutral-100">
-                                    <p class="text-[10px] text-neutral-400 uppercase font-bold mb-1">Rating</p>
-                                    <p class="text-sm font-mono font-bold text-neutral-700">{{ number_format($b['C3_rating'] * 0.20, 4) }}</p>
+
+                                <div>
+                                    <div class="flex justify-between text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">
+                                        <span>Quality (Rating)</span>
+                                        <span>{{ number_format($b['C3_rating'] * 100, 0) }}% Match</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-neutral-200 rounded-full overflow-hidden">
+                                        <div class="h-full bg-emerald-500 rounded-full" style="width: {{ $getW($b['C3_rating'], 1) }}%"></div>
+                                    </div>
                                 </div>
-                                <div class="bg-neutral-50 rounded-xl p-3 border border-neutral-100">
-                                    <p class="text-[10px] text-neutral-400 uppercase font-bold mb-1">Price</p>
-                                    <p class="text-sm font-mono font-bold text-neutral-700">{{ number_format($b['C4_price'] * 0.15, 4) }}</p>
+
+                                <div>
+                                    <div class="flex justify-between text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">
+                                        <span>Budget</span>
+                                        <span>{{ number_format($b['C4_price'] * 100, 0) }}% Match</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-neutral-200 rounded-full overflow-hidden">
+                                        <div class="h-full bg-emerald-500 rounded-full" style="width: {{ $getW($b['C4_price'], 1) }}%"></div>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="flex justify-between items-center mt-3 px-1">
-                                <p class="text-[10px] text-neutral-400">Exact Price Used: Rp {{ number_format($b['exact_price'], 0, ',', '.') }}</p>
-                                <p class="text-[10px] font-bold text-neutral-500 uppercase">Final: {{ $topPick['saw_score'] }}</p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+
             {{-- Alternatives --}}
             @if(!empty($alternatives))
             <div class="mt-8">
@@ -283,31 +295,57 @@
                                         <p class="text-lg font-bold text-neutral-700">{{ round($alt['saw_score'] * 100) }}%</p>
                                     </div>
                                     <button @click="showMath = !showMath" class="text-[10px] font-bold text-neutral-400 uppercase tracking-widest hover:text-neutral-600 bg-neutral-50 px-3 py-1.5 rounded-lg border border-neutral-200 shrink-0">
-                                        <span x-text="showMath ? 'Hide' : 'Math'"></span>
+                                        <span x-text="showMath ? 'Hide' : 'View'"></span>
                                     </button>
                                 </div>
                             </div>
                         </div>
 
                         {{-- Alternative Math Grid --}}
-                        <div x-show="showMath" x-collapse.duration.300ms class="mt-4 pt-3 border-t border-neutral-100">
-                            @php $b = $alt['criteria_breakdown']; @endphp
-                            <div class="grid grid-cols-4 gap-2">
-                                <div class="bg-neutral-50 rounded-lg p-2 text-center">
-                                    <p class="text-[9px] text-neutral-400 uppercase font-bold mb-0.5">Distance</p>
-                                    <p class="text-xs font-mono font-bold text-neutral-600">{{ number_format($b['C1_distance'] * 0.35, 4) }}</p>
+                        <div x-show="showMath" x-collapse.duration.300ms class="mt-4 p-4 bg-neutral-50 rounded-xl border border-neutral-100">
+                            @php 
+                                $b = $alt['criteria_breakdown']; 
+                                $getW = function($val, $weight) { return min(100, max(0, ($val * $weight) * 100)); };
+                            @endphp
+                            <div class="space-y-3">
+                                <div>
+                                    <div class="flex justify-between text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">
+                                        <span>Distance</span>
+                                        <span>{{ number_format($b['C1_distance'] * 100, 0) }}% Match</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-neutral-200 rounded-full overflow-hidden">
+                                        <div class="h-full bg-emerald-500 rounded-full" style="width: {{ $getW($b['C1_distance'], 1) }}%"></div>
+                                    </div>
                                 </div>
-                                <div class="bg-neutral-50 rounded-lg p-2 text-center">
-                                    <p class="text-[9px] text-neutral-400 uppercase font-bold mb-0.5">F. Match</p>
-                                    <p class="text-xs font-mono font-bold text-neutral-600">{{ number_format($b['C2_food_match'] * 0.30, 4) }}</p>
+
+                                <div>
+                                    <div class="flex justify-between text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">
+                                        <span>Craving Match</span>
+                                        <span>{{ number_format($b['C2_food_match'] * 100, 0) }}% Match</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-neutral-200 rounded-full overflow-hidden">
+                                        <div class="h-full bg-emerald-500 rounded-full" style="width: {{ $getW($b['C2_food_match'], 1) }}%"></div>
+                                    </div>
                                 </div>
-                                <div class="bg-neutral-50 rounded-lg p-2 text-center">
-                                    <p class="text-[9px] text-neutral-400 uppercase font-bold mb-0.5">Rate</p>
-                                    <p class="text-xs font-mono font-bold text-neutral-600">{{ number_format($b['C3_rating'] * 0.20, 4) }}</p>
+
+                                <div>
+                                    <div class="flex justify-between text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">
+                                        <span>Quality (Rating)</span>
+                                        <span>{{ number_format($b['C3_rating'] * 100, 0) }}% Match</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-neutral-200 rounded-full overflow-hidden">
+                                        <div class="h-full bg-emerald-500 rounded-full" style="width: {{ $getW($b['C3_rating'], 1) }}%"></div>
+                                    </div>
                                 </div>
-                                <div class="bg-neutral-50 rounded-lg p-2 text-center">
-                                    <p class="text-[9px] text-neutral-400 uppercase font-bold mb-0.5">Price</p>
-                                    <p class="text-xs font-mono font-bold text-neutral-600">{{ number_format($b['C4_price'] * 0.15, 4) }}</p>
+
+                                <div>
+                                    <div class="flex justify-between text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">
+                                        <span>Budget</span>
+                                        <span>{{ number_format($b['C4_price'] * 100, 0) }}% Match</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-neutral-200 rounded-full overflow-hidden">
+                                        <div class="h-full bg-emerald-500 rounded-full" style="width: {{ $getW($b['C4_price'], 1) }}%"></div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -317,21 +355,46 @@
             </div>
             @endif
 
-            {{-- Browse all nearby --}}
-            <div class="mt-10 pt-6 text-center" style="border-top:1px solid #E5E5E5">
-                <p class="text-sm text-neutral-400 mb-3">Want to see everything nearby?</p>
+            <div class="mt-4 text-center">
                 <a href="{{ route('restaurants.browse') }}"
-                   class="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl border transition-all duration-200 active:scale-95"
-                   style="color:#059669; border-color:#059669; background:white">
-                    Browse all nearby places
+                   class="inline-flex items-center justify-center w-full sm:w-auto gap-2 text-sm font-bold text-neutral-500 bg-neutral-100 hover:bg-neutral-200 px-5 py-3 rounded-xl transition-colors">
+                    View all other nearby places
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                     </svg>
                 </a>
             </div>
 
+        </div> 
+        {{-- ^ End of max-w-2xl --}}
+
+        {{-- 2. THIS IS THE FIXED STICKY BAR, NOW SAFELY INSIDE THE MAIN X-DATA WRAPPER --}}
+        <div x-show="showSticky" 
+             x-transition:enter="transition ease-out duration-300 transform"
+             x-transition:enter-start="opacity-0 translate-y-8"
+             x-transition:enter-end="opacity-100 translate-y-0"
+             x-transition:leave="transition ease-in duration-200 transform"
+             x-transition:leave-start="opacity-100 translate-y-0"
+             x-transition:leave-end="opacity-0 translate-y-8"
+             x-cloak
+             class="fixed bottom-0 left-0 right-0 p-4 z-50 pointer-events-none" 
+             style="padding-bottom: max(1rem, env(safe-area-inset-bottom));">
+             
+            <div class="max-w-2xl mx-auto flex justify-center pointer-events-auto">
+                <a href="{{ route('restaurants.index') }}" 
+                class="flex items-center gap-3 px-6 py-3.5 bg-neutral-900 text-white rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.2)] hover:scale-105 transition-transform active:scale-95">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                    </svg>
+                    <span class="text-sm font-bold tracking-wide">New Search</span>
+                </a>
+            </div>
         </div>
-        
-    </div>
-    
+
+    </div> 
+    {{-- ^ End of min-h-screen main wrapper --}}
+
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
 </x-app-layout>

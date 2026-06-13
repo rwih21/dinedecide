@@ -4,25 +4,23 @@
 
         {{-- Header --}}
         <div class="mb-8">
-            <a href="{{ route('restaurants.index') }}"
-               class="inline-flex items-center gap-2 text-sm font-medium text-neutral-400 hover:text-emerald-600 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                Back to search
-            </a>
+            <a x-ref="topButton" href="{{ route('restaurants.index') }}"
+                   class="inline-flex items-center gap-2 text-sm font-medium text-neutral-500 hover:text-emerald-600 transition-colors bg-white px-4 py-2 rounded-xl border border-neutral-200 shadow-sm w-fit">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                    Back to search
+                </a>
 
             <div class="mt-5">
                 <p class="text-neutral-400 text-xs font-bold uppercase tracking-widest">Exploring</p>
                 <h2 class="text-2xl font-bold text-neutral-900 mt-1 leading-tight">All Nearby Places</h2>
                 <p class="text-sm text-neutral-400 mt-1">
                     {{ count($places) }} places found within 3km
-                    @if($fromCache)
+                    {{-- @if($fromCache)
                         <span class="ml-2 inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full"
                               style="background:#F0FDF4; color:#059669; border:1px solid #BBF7D0">
                             ⚡ Instant
                         </span>
-                    @endif
+                    @endif --}}
                 </p>
             </div>
         </div>
@@ -129,7 +127,7 @@
         {{-- Filter bar --}}
         <div x-data="{ active: 'all' }">
 
-            <div class="flex flex-wrap gap-2 mb-6">
+            <div class="flex overflow-x-auto gap-2 no-scrollbar whitespace-nowrap mb-6">
                 <button @click="active = 'all'"
                         class="text-xs px-3 py-1.5 rounded-full border font-semibold transition-all duration-150"
                         :style="active === 'all'
@@ -231,4 +229,16 @@
 
     </div>
 </div>
+<style>
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* Hide scrollbar for IE, Edge and Firefox */
+    .no-scrollbar {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+    }
+</style>
 </x-app-layout>
