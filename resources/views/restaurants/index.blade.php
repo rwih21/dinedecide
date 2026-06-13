@@ -1,5 +1,5 @@
 <x-app-layout>
-<div class="min-h-screen relative overflow-hidden flex flex-col items-center px-6 py-8" style="background:#F9F9F8">
+<div class="relative overflow-hidden flex flex-col items-center px-6 py-8" style="background:#F9F9F8">
 
     {{-- Background blurs --}}
     <div class="pointer-events-none fixed inset-0 overflow-hidden">
@@ -9,7 +9,7 @@
              style="background:radial-gradient(circle, #F59E0B, transparent 70%)"></div>
     </div>
 
-    <div class="relative w-full max-w-md flex flex-col min-h-screen py-8" x-data="searchForm()" x-cloak>
+    <div class="relative w-full max-w-md flex flex-col flex-1" x-data="searchForm()" x-cloak>
 
         {{-- INPUT SCREEN --}}
         <div x-show="screen === 'input'"
@@ -61,6 +61,7 @@
                                 class="w-full text-sm px-4 py-3 rounded-xl border border-neutral-200 mb-3 focus:ring-0 focus:border-emerald-500">
                             
                             <div id="location-map" class="w-full h-64 rounded-2xl border border-neutral-100 overflow-hidden mb-4"></div>
+                            <p class="text-[11px] text-center mb-3" style="color:#A3A3A3">Drag the pin to adjust your location</p>
 
                             <div class="flex gap-2">
                                 <button @click="confirmMapLocation()" class="flex-1 py-3 bg-emerald-600 text-white font-semibold rounded-xl text-sm">Confirm</button>
@@ -98,6 +99,8 @@
                  x-transition:enter-end="opacity-100 translate-x-0"
                  class="flex-1 flex flex-col">
 
+                 <div class="flex-1"></div>
+
                 <form action="{{ route('restaurants.search') }}" method="POST" @submit="handleSubmit">
                     @csrf
                     <input type="hidden" name="mode" value="nlp">
@@ -134,6 +137,19 @@
                         <p class="text-xs mt-2 text-center" style="color:#EF4444">{{ $message }}</p>
                     @enderror
                 </form>
+
+                 <div class="mt-5 pb-8 text-center">
+                    <a href="{{ route('restaurants.browse') }}"
+                    class="inline-flex items-center gap-1.5 text-xs font-medium transition-colors"
+                    style="color:#A3A3A3"
+                    onmouseover="this.style.color='#059669'"
+                    onmouseout="this.style.color='#A3A3A3'">
+                        or browse everything nearby
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
+                    </a>
+                </div>
             </div>
             {{-- Filter mode --}}
             <div x-show="mode === 'filter'"
@@ -265,7 +281,7 @@
                         </div>
 
                         {{-- ── SECTION 4: Visit Time ── --}}
-                        <div class="p-5" style="border-bottom: 1px solid #F5F5F5">
+                        {{-- <div class="p-5" style="border-bottom: 1px solid #F5F5F5">
                             <p class="font-bold uppercase tracking-widest mb-3" style="font-size:10px; color:#A3A3A3">
                                 When are you going?
                             </p>
@@ -289,7 +305,7 @@
                                 </button>
                                 @endforeach
                             </div>
-                        </div>
+                        </div> --}}
 
                         {{-- ── FOOTER: Summary + Submit ── --}}
                         <div class="p-5">
@@ -318,13 +334,13 @@
         </div>
 
        
-        <div class="mt-6 pt-5 border-t border-neutral-100 text-center">
+        {{-- <div class="mt-6 pt-5 border-t border-neutral-100 text-center">
             <a href="{{ route('restaurants.browse') }}"
                 class="inline-flex items-center gap-1.5 text-sm font-semibold text-neutral-400 hover:text-emerald-600 transition-colors">
                 Just show me everything nearby
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
             </a>
-        </div>
+        </div> --}}
 
         {{-- PROCESSING SCREEN --}}
         <div x-show="screen === 'processing'"
@@ -403,6 +419,11 @@ input[type='range']::-moz-range-thumb {
 input[type='range']::-webkit-slider-runnable-track {
     height: 6px;
     border-radius: 9999px;
+}
+
+html, body, body > div:first-child {
+    height: 100%;
+    background: #F9F9F8;
 }
 </style>
 
