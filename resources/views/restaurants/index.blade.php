@@ -60,6 +60,19 @@
                             <input type="text" id="map-search-input" placeholder="Search area..." 
                                 class="w-full text-sm px-4 py-3 rounded-xl border border-neutral-200 mb-3 focus:ring-0 focus:border-emerald-500">
                             
+                            <button type="button"
+                                @click="detectLocation()"
+                                :disabled="detecting"
+                                class="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl border border-emerald-200 mb-3 transition-all active:scale-95"
+                                :style="detecting ? 'background:#F0FDF4; color:#A3A3A3' : 'background:#F0FDF4; color:#059669'">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                </svg>
+                                <span x-text="detecting ? 'Detecting...' : 'Use my current location'"></span>
+                            </button>
+
                             <div id="location-map" class="w-full h-64 rounded-2xl border border-neutral-100 overflow-hidden mb-4"></div>
                             <p class="text-[11px] text-center mb-3" style="color:#A3A3A3">Drag the pin to adjust your location</p>
 
@@ -549,6 +562,7 @@ function locationPicker() {
                     this.lng   = position.coords.longitude.toString();
                     this.label = 'Current location detected';
                     this.detecting = false;
+                    this.showManual = false;
                     this.saveLocation(this.lat, this.lng);
                 },
                 () => {
