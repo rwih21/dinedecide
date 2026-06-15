@@ -46,16 +46,11 @@
                     <span class="text-xs font-medium bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-100">
                         📍 Within {{ number_format($intent['MaxDistance'] / 1000, 1) }}km
                     </span>
-                    @if($intent['Occasion'] !== 'any')
-                    <span class="text-xs font-medium bg-purple-50 text-purple-700 px-3 py-1.5 rounded-lg border border-purple-100">
-                        🎭 {{ ucfirst($intent['Occasion']) }}
-                    </span>
-                    @endif
-                    @if($intent['VisitTime'] !== 'now')
+                    {{-- @if($intent['VisitTime'] !== 'now')
                     <span class="text-xs font-medium bg-rose-50 text-rose-700 px-3 py-1.5 rounded-lg border border-rose-100">
                         🕐 {{ ucfirst($intent['VisitTime']) }}
                     </span>
-                    @endif
+                    @endif --}}
                 </div>
             </div>
 
