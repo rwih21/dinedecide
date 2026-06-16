@@ -10,8 +10,8 @@ class SawService
     // C3: Rating     (Benefit criterion) — Bayesian-adjusted
     // C4: Price      (Cost criterion)
     private array $weights = [
-        'distance'   => 0.35,
-        'food_match' => 0.30,
+        'distance'   => 0.30,
+        'food_match' => 0.35,
         'rating'     => 0.20,
         'price'      => 0.15,
     ];
