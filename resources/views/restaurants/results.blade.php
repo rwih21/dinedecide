@@ -35,9 +35,11 @@
 
                 {{-- Color-coded intent pills --}}
                 <div class="flex gap-2 mt-4 flex-wrap">
+                    @if(!empty($intent['FoodSearch']))
                     <span class="text-xs font-medium bg-orange-50 text-orange-700 px-3 py-1.5 rounded-lg border border-orange-100">
-                        🍜 {{ $intent['FoodType'] }}
+                        🍜 {{ $intent['FoodSearch'] }}
                     </span>
+                    @endif
                     @if($intent['MaxBudget'] > 0)
                     <span class="text-xs font-medium bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg border border-emerald-100">
                         💰 Up to {{ number_format($intent['MaxBudget'], 0, ',', '.') }}

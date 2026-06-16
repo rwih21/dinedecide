@@ -9,7 +9,7 @@ class SearchHistory extends Model
     protected $fillable = [
         'user_id',
         'raw_query',
-        'extracted_food_type',
+        'extracted_food_search',
         'latitude',
         'longitude',
     ];

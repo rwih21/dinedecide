@@ -9,6 +9,28 @@ class GooglePlacesService
 {
     private string $apiKey;
 
+    /**
+     * Field weights for token overlap relevance scoring.
+     * Higher weight = stronger signal when a query token matches this field.
+     */
+    private array $fieldWeights = [
+        'types'    => 2.0,  // Google place types (e.g. "ramen_restaurant" → "ramen")
+        'name'     => 1.5,  // Restaurant name — very informative
+        'vicinity' => 0.5,  // Address — low signal, but catches neighbourhood food names
+    ];
+
+    /**
+     * Stop words to strip before token overlap computation.
+     * Bilingual ID/EN to cover both input modes.
+     */
+    private array $stopWords = [
+        'the', 'a', 'an', 'and', 'or', 'i', 'want', 'need', 'find', 'get',
+        'something', 'some', 'any', 'good', 'nice', 'best', 'great',
+        'yang', 'untuk', 'saya', 'aku', 'mau', 'makan', 'di', 'ke',
+        'dan', 'atau', 'ada', 'cari', 'pengen', 'ingin', 'deket',
+        'sekitar', 'sini', 'dekat', 'near', 'nearby',
+    ];
+
     public function __construct()
     {
         $this->apiKey = config('services.google_places.key', '');
@@ -26,14 +48,10 @@ class GooglePlacesService
             return [];
         }
 
-        // Build the query Google actually receives
-        // If Ollama gave us a specific dish/food, use it directly so Google's
-        // NLP handles the semantic search. Fall back to "restaurant" if empty.
         $query = !empty(trim($foodSearch)) ? trim($foodSearch) : 'restaurant';
 
         $bucketLat = round($userLat, 2);
         $bucketLng = round($userLng, 2);
-        // Cache key uses the raw query so "ayam geprek" and "chicken" are cached separately
         $cacheKey  = 'places_' . md5($query) . "_{$bucketLat}_{$bucketLng}_{$maxDistance}";
 
         $places = cache()->get($cacheKey);
@@ -128,7 +146,7 @@ class GooglePlacesService
                 'price_range'     => $place['priceRange'] ?? null,
                 'price_display'   => $priceDisplay,
                 'types'           => $this->cleanTypes($place['types'] ?? [], $name),
-                'food_match'      => 0,
+                'food_match'      => 0.0, // will be populated by applyFoodMatch()
                 'open_now'        => $place['regularOpeningHours']['openNow'] ?? null,
                 'photo_url'       => $photoUrl,
                 'vicinity'        => $place['formattedAddress'] ?? '',
@@ -173,6 +191,104 @@ class GooglePlacesService
         return $candidates;
     }
 
+    /**
+     * Compute a weighted token overlap relevance score between the user's
+     * FoodSearch query and each candidate's available text fields.
+     *
+     * Formula:
+     *   rel(Q, P) = min(1, (1/|Q|) * Σ_{t∈Q} max_field_weight(t, P))
+     *
+     * When FoodSearch is empty (e.g. "dinner romantis buat anniversary"),
+     * all candidates receive food_match = 1.0 so C2 abstains from
+     * differentiating and the other three SAW criteria take over.
+     *
+     * @param  array  $candidates  Restaurant candidates from mapResults()
+     * @param  string $foodSearch  Free-text food intent from NLP or filter
+     * @return array  Same candidates with food_match populated (0.0–1.0)
+     */
+    public function applyFoodMatch(array $candidates, string $foodSearch): array
+    {
+        $queryTokens = $this->tokenize($foodSearch);
+
+        // Empty query → criterion abstains, everyone gets neutral 1.0
+        if (empty($queryTokens)) {
+            return array_map(function ($r) {
+                $r['food_match'] = 1.0;
+                return $r;
+            }, $candidates);
+        }
+
+        return array_map(function ($r) use ($queryTokens) {
+            $r['food_match'] = $this->computeRelevance($queryTokens, $r);
+            return $r;
+        }, $candidates);
+    }
+
+    /**
+     * Core relevance computation for a single (query, place) pair.
+     * Called by applyFoodMatch() for SAW candidates and by PromotionService
+     * for promoted place matching.
+     *
+     * @param  array $queryTokens  Pre-tokenized query terms
+     * @param  array $place        A candidate array with 'name', 'types', 'vicinity' keys
+     * @return float               Score in [0.0, 1.0]
+     */
+    public function computeRelevance(array $queryTokens, array $place): float
+    {
+        if (empty($queryTokens)) {
+            return 1.0;
+        }
+
+        // Build per-field token sets
+        $fieldTokens = [
+            'types'    => $this->tokenize(implode(' ', $place['types'] ?? [])),
+            'name'     => $this->tokenize($place['name'] ?? ''),
+            'vicinity' => $this->tokenize($place['vicinity'] ?? ''),
+        ];
+
+        $totalWeight = 0.0;
+
+        foreach ($queryTokens as $token) {
+            $bestWeight = 0.0;
+            foreach ($this->fieldWeights as $field => $weight) {
+                if (in_array($token, $fieldTokens[$field], true)) {
+                    $bestWeight = max($bestWeight, $weight);
+                }
+            }
+            $totalWeight += $bestWeight;
+        }
+
+        // Normalize by query length, cap at 1.0
+        return min(1.0, $totalWeight / count($queryTokens));
+    }
+
+    /**
+     * Tokenize a string into a clean, comparable token array.
+     * - Lowercased
+     * - Punctuation stripped
+     * - Stop words removed
+     * - No stemming (declared limitation for reproducibility)
+     *
+     * @param  string $text
+     * @return array<string>
+     */
+    public function tokenize(string $text): array
+    {
+        if (empty(trim($text))) {
+            return [];
+        }
+
+        // Lowercase and strip punctuation
+        $text   = strtolower($text);
+        $text   = preg_replace('/[^\p{L}\p{N}\s]/u', ' ', $text);
+        $tokens = preg_split('/\s+/', trim($text), -1, PREG_SPLIT_NO_EMPTY);
+
+        // Remove stop words
+        return array_values(
+            array_filter($tokens, fn($t) => !in_array($t, $this->stopWords, true))
+        );
+    }
+
     public function calculateDistance(float $lat1, float $lng1, float $lat2, float $lng2): float
     {
         $earthRadius = 6371000;
@@ -203,6 +319,13 @@ class GooglePlacesService
             'coffee_shop'           => 'coffee',
             'cafe'                  => 'coffee',
             'fast_food_restaurant'  => 'fastfood',
+            'chinese_restaurant'    => 'chinese',
+            'korean_restaurant'     => 'korean',
+            'seafood_restaurant'    => 'seafood',
+            'steak_house'           => 'steak',
+            'dim_sum_restaurant'    => 'dimsum',
+            'vegetarian_restaurant' => 'vegetarian',
+            'vegan_restaurant'      => 'vegan',
         ];
 
         $cleaned = [];
@@ -239,6 +362,9 @@ class GooglePlacesService
             'ichiban'         => 'japanese',
             'katsu'           => 'japanese',
             'tonkatsu'        => 'japanese',
+            'dimsum'          => 'dimsum',
+            'dim sum'         => 'dimsum',
+            'yumcha'          => 'dimsum',
             'bakso'           => 'indonesian',
             'nasi'            => 'indonesian',
             'soto'            => 'indonesian',
@@ -270,6 +396,9 @@ class GooglePlacesService
             'starbucks'       => 'coffee',
             'espresso'        => 'coffee',
             'brew'            => 'coffee',
+            'vegetarian'      => 'vegetarian',
+            'vegan'           => 'vegan',
+            'halal'           => 'halal',
             'fastfood'        => 'fastfood',
             'fast food'       => 'fastfood',
         ];
@@ -282,16 +411,6 @@ class GooglePlacesService
         }
 
         return empty($inferred) ? ['indonesian'] : array_unique($inferred);
-    }
-
-    public function applyFoodMatch(array $candidates, string $foodType): array
-    {
-        return array_map(function ($r) use ($foodType) {
-            // Since Google already searched for the right food, all results
-            // are considered relevant. food_match = 1 for everyone.
-            $r['food_match'] = 1;
-            return $r;
-        }, $candidates);
     }
 
     public function applyTimeWarning(array $candidates, string $visitTime): array

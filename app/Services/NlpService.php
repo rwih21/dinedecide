@@ -25,13 +25,6 @@ class NlpService
 
     public function extractIntent(string $rawQuery): array
     {
-        $cacheKey = 'nlp_intent_' . md5(strtolower(trim($rawQuery)));
-
-        if ($cached = cache()->get($cacheKey)) {
-            Log::info('NLP cache hit for query: ' . $rawQuery);
-            return $cached;
-        }
-
         try {
             $response = $this->client->post('chat/completions', [
                 'json' => [
@@ -49,11 +42,6 @@ class NlpService
 
             $result = $this->parseResponse($content);
             Log::info('NLP intent extracted', $result);
-
-            // Only cache if Ollama returned something meaningful
-            if ($result['FoodSearch'] !== '' || $result['MaxPrice'] !== 0) {
-                cache()->put($cacheKey, $result, now()->addHours(24));
-            }
 
             return $result;
 
@@ -78,20 +66,10 @@ FIELD RULES:
   - "ayam penyet pedas" → "ayam penyet"
   - "kopi susu" → "kopi susu"
   - "ramen hangat" → "ramen"
+  - "dimsum" → "dimsum"
+  - "vegetarian" → "vegetarian"
   - "I want something to eat" → "" (empty string — no food specified)
   - If nothing food-related is mentioned, return an empty string "".
-
-"FoodType": A simplified category for internal scoring. Must be one of:
-  any, indonesian, chicken, ramen, sushi, japanese, burger, pizza, coffee, korean, seafood, chinese, steak, thai, fastfood
-  - "ayam geprek" → "chicken"
-  - "ayam penyet" → "chicken"
-  - "chicken katsu" → "chicken"
-  - "tonkatsu" → "japanese"
-  - "kopi susu" → "coffee"
-  - "nasi padang" → "indonesian"
-  - "pad thai" → "thai"
-  - "bibimbap" → "korean"
-  - If unsure, pick the closest category. Only use "any" if truly nothing food-related is mentioned.
 
 "MaxPrice": Maximum budget as an exact integer in IDR.
   - "under 50k" / "50rb" → 50000
@@ -112,25 +90,31 @@ FIELD RULES:
 EXAMPLES:
 
 Input: "I want chicken katsu under 50k"
-Output: {"FoodSearch": "chicken katsu", "FoodType": "chicken", "MaxPrice": 50000, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
+Output: {"FoodSearch": "chicken katsu", "MaxPrice": 50000, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
 
 Input: "ayam geprek deket sini"
-Output: {"FoodSearch": "ayam geprek", "FoodType": "chicken", "MaxPrice": 0, "MaxDistance": 1000, "Occasion": "any", "VisitTime": "now"}
+Output: {"FoodSearch": "ayam geprek", "MaxPrice": 0, "MaxDistance": 1000, "Occasion": "any", "VisitTime": "now"}
 
 Input: "pengen ramen hangat malem ini"
-Output: {"FoodSearch": "ramen", "FoodType": "ramen", "MaxPrice": 0, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "night"}
+Output: {"FoodSearch": "ramen", "MaxPrice": 0, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "night"}
 
 Input: "cari nasi padang murah sekitar sini"
-Output: {"FoodSearch": "nasi padang", "FoodType": "indonesian", "MaxPrice": 30000, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
+Output: {"FoodSearch": "nasi padang", "MaxPrice": 30000, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
 
 Input: "aku mau minum kopi susu deket sini"
-Output: {"FoodSearch": "kopi susu", "FoodType": "coffee", "MaxPrice": 0, "MaxDistance": 1000, "Occasion": "any", "VisitTime": "now"}
+Output: {"FoodSearch": "kopi susu", "MaxPrice": 0, "MaxDistance": 1000, "Occasion": "any", "VisitTime": "now"}
 
 Input: "dinner romantis buat anniversary"
-Output: {"FoodSearch": "", "FoodType": "any", "MaxPrice": 0, "MaxDistance": 3000, "Occasion": "romantic", "VisitTime": "evening"}
+Output: {"FoodSearch": "", "MaxPrice": 0, "MaxDistance": 3000, "Occasion": "romantic", "VisitTime": "evening"}
+
+Input: "I want dimsum"
+Output: {"FoodSearch": "dimsum", "MaxPrice": 0, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
+
+Input: "something vegetarian under 80k"
+Output: {"FoodSearch": "vegetarian", "MaxPrice": 80000, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
 
 Return exactly this shape:
-{"FoodSearch": "", "FoodType": "any", "MaxPrice": 0, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
+{"FoodSearch": "", "MaxPrice": 0, "MaxDistance": 3000, "Occasion": "any", "VisitTime": "now"}
 PROMPT;
     }
 
@@ -142,27 +126,23 @@ PROMPT;
 
         $data = json_decode($clean, true);
 
-        if (json_last_error() !== JSON_ERROR_NONE || !isset($data['FoodType'])) {
+        if (json_last_error() !== JSON_ERROR_NONE || !array_key_exists('FoodSearch', $data)) {
             Log::warning('NlpService bad parse: ' . $content);
             return $this->fallbackIntent();
         }
 
-        $validFoodTypes = ['any','indonesian','chicken','ramen','sushi','japanese','burger','pizza','coffee','korean','seafood','chinese','steak','thai','fastfood'];
-        $validOccasions = ['family','romantic','formal','casual','any'];
-        $validTimes     = ['now','morning','lunch','afternoon','evening','night'];
+        $validOccasions = ['family', 'romantic', 'formal', 'casual', 'any'];
+        $validTimes     = ['now', 'morning', 'lunch', 'afternoon', 'evening', 'night'];
 
         $foodSearch = trim($data['FoodSearch'] ?? '');
-        $foodType   = strtolower(trim($data['FoodType']  ?? 'any'));
         $occasion   = strtolower(trim($data['Occasion']  ?? 'any'));
         $visitTime  = strtolower(trim($data['VisitTime'] ?? 'now'));
 
-        if (!in_array($foodType, $validFoodTypes))  $foodType  = 'any';
         if (!in_array($occasion, $validOccasions))  $occasion  = 'any';
         if (!in_array($visitTime, $validTimes))     $visitTime = 'now';
 
         return [
-            'FoodSearch'  => $foodSearch,   // passed directly to Google textQuery
-            'FoodType'    => $foodType,      // used for SAW food_match scoring only
+            'FoodSearch'  => $foodSearch,
             'MaxPrice'    => (int)   ($data['MaxPrice']    ?? 0),
             'MaxDistance' => (float) ($data['MaxDistance'] ?? 3000),
             'Occasion'    => $occasion,
@@ -173,8 +153,7 @@ PROMPT;
     private function fallbackIntent(string $rawQuery = ''): array
     {
         return [
-            'FoodSearch'  => $rawQuery, // fall back to full raw query so Google still gets something
-            'FoodType'    => 'any',
+            'FoodSearch'  => $rawQuery,
             'MaxPrice'    => 0,
             'MaxDistance' => 3000.0,
             'Occasion'    => 'any',
